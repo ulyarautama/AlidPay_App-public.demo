@@ -3,7 +3,6 @@
 import {
   AlertTriangle,
   BarChart3,
-  ChevronRight,
   CreditCard,
   LayoutDashboard,
   Menu,
@@ -15,7 +14,9 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { api } from "@/app/lib/axios";
 
 export default function DashboardLayout({
   children,
@@ -23,6 +24,41 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    let active = true;
+
+    api
+      .get("/api/admin/me")
+      .then(() => {
+        if (active) setAuthChecked(true);
+      })
+      .catch(() => {
+        if (active) {
+          router.replace(`/admin/login?redirect=${encodeURIComponent(pathname)}`);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [pathname, router]);
+
+  if (!authChecked) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#F7F8FA]">
+        <div className="text-center">
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-[#6B1E2C]" />
+          <p className="mt-4 text-xs font-semibold text-slate-400">
+            Verifying secure admin session...
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900">
@@ -83,7 +119,7 @@ export default function DashboardLayout({
             </Link>
 
             <Link
-              href="/dashboard/transactions"
+              href="/dashboard/transaction"
               className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
             >
               <CreditCard size={18} />

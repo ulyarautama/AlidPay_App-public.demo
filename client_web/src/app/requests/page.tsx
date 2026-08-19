@@ -13,6 +13,7 @@ import { api } from "../lib/axios";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "next/navigation";
+import { apiErrorMessage, rejectTransaction } from "../lib/transactions";
 
 interface TransactionUser {
   id: string;
@@ -52,6 +53,8 @@ export default function RequestsPage() {
 
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<TabType>("keluar");
   const { user } = useAuth();
@@ -75,7 +78,8 @@ export default function RequestsPage() {
   }
 
   useEffect(() => {
-    getRequests();
+    const timeout = window.setTimeout(() => void getRequests(), 0);
+    return () => window.clearTimeout(timeout);
   }, []);
 
   /*
@@ -146,11 +150,30 @@ export default function RequestsPage() {
 
   async function handleConfirm(transaction: Transaction) {
     try {
+      setProcessingId(transaction.id);
+      setError(null);
       await api.post(`/api/transaction/${transaction.id}/konfirmasi`);
 
       router.push(`/transaction/${transaction.id}`);
     } catch (error) {
-      console.error("Gagal mengonfirmasi transaksi:", error);
+      setError(apiErrorMessage(error, "Gagal mengonfirmasi transaksi."));
+    } finally {
+      setProcessingId(null);
+    }
+  }
+
+  async function handleReject(transaction: Transaction) {
+    if (!window.confirm(`Yakin menolak transaksi “${transaction.judul_barang}”?`)) return;
+
+    try {
+      setProcessingId(transaction.id);
+      setError(null);
+      await rejectTransaction(transaction.id);
+      await getRequests();
+    } catch (caught) {
+      setError(apiErrorMessage(caught, "Gagal menolak transaksi."));
+    } finally {
+      setProcessingId(null);
     }
   }
 
@@ -277,6 +300,11 @@ export default function RequestsPage() {
         </div>
 
         {/* REQUEST LIST */}
+        {error && (
+          <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-semibold text-red-700">
+            {error}
+          </div>
+        )}
         <section className="mt-8 space-y-4">
           {loading ? (
             <div className="rounded-2xl border border-[#E0DDD5] bg-[#EFECE4] p-8 text-center">
@@ -413,6 +441,8 @@ export default function RequestsPage() {
                         <div className="flex gap-2">
                           <button
                             type="button"
+                            disabled={processingId === transaction.id}
+                            onClick={() => void handleReject(transaction)}
                             className="flex items-center justify-center gap-2 rounded-full border border-[#D8D4CB] px-4 py-2.5 text-xs font-bold text-[#75726B] transition hover:bg-[#F5EFE6] hover:text-[#181715]"
                           >
                             <X size={14} />
@@ -421,10 +451,13 @@ export default function RequestsPage() {
 
                           <button
                             type="button"
+                            disabled={processingId === transaction.id}
                             onClick={() => handleConfirm(transaction)}
                             className="group flex items-center justify-center gap-2 rounded-full bg-[#181715] px-5 py-2.5 text-xs font-bold text-white transition hover:-translate-y-0.5 hover:bg-[#2a2926]"
                           >
-                            Konfirmasi
+                            {processingId === transaction.id
+                              ? "Memproses..."
+                              : "Konfirmasi"}
                             <ArrowRight
                               size={14}
                               className="transition-transform group-hover:translate-x-1"

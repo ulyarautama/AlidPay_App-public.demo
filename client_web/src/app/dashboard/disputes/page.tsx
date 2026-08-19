@@ -30,7 +30,9 @@ type ApiDispute = {
   description: string;
   requested_resolution: string;
   evidence_files: EvidenceFile[];
-  priority: "high" | "medium" | "low";
+  difficulty: "easy" | "moderate" | "hard" | "critical";
+  difficulty_score: number;
+  difficulty_reasons: DifficultyReason[];
   status: string;
   created_at: string;
   updated_at: string;
@@ -62,7 +64,16 @@ type EvidenceFile = {
   mime_type?: string | null;
 };
 
+type DifficultyReason =
+  | string
+  | {
+      factor: string;
+      label: string;
+      points: number;
+    };
+
 type Dispute = {
+  rawId: number;
   id: string;
   transactionId: string;
 
@@ -88,7 +99,9 @@ type Dispute = {
 
   status: DisputeStatus;
 
-  priority: "high" | "medium" | "low";
+  difficulty: "easy" | "moderate" | "hard" | "critical";
+  difficultyScore: number;
+  difficultyReasons: DifficultyReason[];
 
   createdAt: string;
 };
@@ -123,18 +136,22 @@ const statusConfig: Record<
   },
 };
 
-const priorityConfig = {
-  high: {
-    label: "High",
-    className: "text-red-600 bg-red-50",
+const difficultyConfig = {
+  easy: {
+    label: "Easy",
+    className: "text-emerald-700 bg-emerald-50",
   },
-  medium: {
-    label: "Medium",
-    className: "text-amber-600 bg-amber-50",
+  moderate: {
+    label: "Moderate",
+    className: "text-blue-700 bg-blue-50",
   },
-  low: {
-    label: "Low",
-    className: "text-slate-500 bg-slate-100",
+  hard: {
+    label: "Hard",
+    className: "text-amber-700 bg-amber-50",
+  },
+  critical: {
+    label: "Critical",
+    className: "text-red-700 bg-red-50",
   },
 };
 
@@ -180,8 +197,12 @@ function StatusBadge({ status }: { status: DisputeStatus }) {
   );
 }
 
-function PriorityBadge({ priority }: { priority: Dispute["priority"] }) {
-  const config = priorityConfig[priority];
+function DifficultyBadge({
+  difficulty,
+}: {
+  difficulty: Dispute["difficulty"];
+}) {
+  const config = difficultyConfig[difficulty];
 
   return (
     <span
@@ -195,19 +216,27 @@ function PriorityBadge({ priority }: { priority: Dispute["priority"] }) {
 export default function DisputesPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<"all" | DisputeStatus>("all");
-  const [priority, setPriority] = useState<"all" | Dispute["priority"]>("all");
+  const [difficulty, setDifficulty] = useState<"all" | Dispute["difficulty"]>(
+    "all",
+  );
   const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
   const [disputes, setDisputes] = useState<ApiDispute[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [resolutionNotes, setResolutionNotes] = useState("");
+  const [resolving, setResolving] = useState<
+    "refund_buyer" | "release_seller" | null
+  >(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   async function getDisputes(): Promise<ApiDispute[]> {
-    const res = await api.get(`/api/disputes`);
+    const res = await api.get(`/api/admin/disputes`);
 
     return res.data?.data ?? res.data ?? [];
   }
 
   const mappedDisputes: Dispute[] = disputes.map((dispute) => ({
+    rawId: dispute.id,
     id: `DSP-${String(dispute.id).padStart(3, "0")}`,
 
     transactionId: dispute.transaction_id,
@@ -240,15 +269,66 @@ export default function DisputesPage() {
       ? dispute.status
       : "open") as DisputeStatus,
 
-    priority: (["high", "medium", "low"].includes(dispute.priority)
-      ? dispute.priority
-      : "medium") as Dispute["priority"],
+    difficulty: (["easy", "moderate", "hard", "critical"].includes(
+      dispute.difficulty,
+    )
+      ? dispute.difficulty
+      : "moderate") as Dispute["difficulty"],
+    difficultyScore: Number(dispute.difficulty_score ?? 0),
+    difficultyReasons: dispute.difficulty_reasons ?? [],
 
     createdAt: new Date(dispute.created_at).toLocaleString("id-ID", {
       dateStyle: "medium",
       timeStyle: "short",
     }),
   }));
+
+  async function resolveDispute(
+    resolution: "refund_buyer" | "release_seller",
+  ) {
+    if (!selectedDispute || resolutionNotes.trim().length < 10) {
+      setActionError("Catatan keputusan minimal 10 karakter.");
+      return;
+    }
+
+    const destination =
+      resolution === "refund_buyer" ? "buyer" : "seller";
+    if (
+      !window.confirm(
+        `Konfirmasi perpindahan ${formatRupiah(selectedDispute.amount)} ke ${destination}? Tindakan ini tidak dapat diulang.`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setResolving(resolution);
+      setActionError(null);
+      const response = await api.post(
+        `/api/admin/disputes/${selectedDispute.rawId}/resolve`,
+        { resolution, notes: resolutionNotes.trim() },
+      );
+      const updated = response.data?.data ?? response.data;
+      setDisputes((current) =>
+        current.map((item) =>
+          item.id === selectedDispute.rawId ? updated : item,
+        ),
+      );
+      setSelectedDispute(null);
+      setResolutionNotes("");
+    } catch (caught) {
+      const message =
+        typeof caught === "object" &&
+        caught !== null &&
+        "response" in caught
+          ? (caught as { response?: { data?: { message?: string } } }).response
+              ?.data?.message
+          : null;
+      setActionError(message ?? "Keputusan gagal diproses.");
+    } finally {
+      setResolving(null);
+    }
+  }
 
   const filteredDisputes = useMemo(() => {
     const keyword = search.toLowerCase();
@@ -266,12 +346,12 @@ export default function DisputesPage() {
 
       const matchesStatus = status === "all" || dispute.status === status;
 
-      const matchesPriority =
-        priority === "all" || dispute.priority === priority;
+      const matchesDifficulty =
+        difficulty === "all" || dispute.difficulty === difficulty;
 
-      return matchesSearch && matchesStatus && matchesPriority;
+      return matchesSearch && matchesStatus && matchesDifficulty;
     });
-  }, [mappedDisputes, search, status, priority]);
+  }, [mappedDisputes, search, status, difficulty]);
 
   const totalAmount = mappedDisputes
     .filter((item) => item.status !== "resolved")
@@ -536,19 +616,22 @@ export default function DisputesPage() {
                   />
                 </div>
 
-                {/* PRIORITY */}
+                {/* DIFFICULTY */}
                 <div className="relative">
                   <select
-                    value={priority}
+                    value={difficulty}
                     onChange={(e) =>
-                      setPriority(e.target.value as "all" | Dispute["priority"])
+                      setDifficulty(
+                        e.target.value as "all" | Dispute["difficulty"],
+                      )
                     }
                     className="h-10 appearance-none rounded-xl border border-slate-200 bg-white px-4 pr-9 text-xs font-semibold outline-none focus:border-[#6B1E2C]"
                   >
-                    <option value="all">All Priority</option>
-                    <option value="high">High</option>
-                    <option value="medium">Medium</option>
-                    <option value="low">Low</option>
+                    <option value="all">All Difficulty</option>
+                    <option value="easy">Easy</option>
+                    <option value="moderate">Moderate</option>
+                    <option value="hard">Hard</option>
+                    <option value="critical">Critical</option>
                   </select>
 
                   <ChevronDown
@@ -605,7 +688,7 @@ export default function DisputesPage() {
                   </th>
 
                   <th className="px-6 py-4 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                    Priority
+                    Difficulty
                   </th>
 
                   <th className="px-6 py-4 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
@@ -631,8 +714,11 @@ export default function DisputesPage() {
                             {dispute.id}
                           </p>
 
-                          {dispute.priority === "high" && (
-                            <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                          {dispute.difficulty === "critical" && (
+                            <span
+                              title="Critical dispute"
+                              className="h-1.5 w-1.5 rounded-full bg-red-500"
+                            />
                           )}
                         </div>
 
@@ -695,7 +781,7 @@ export default function DisputesPage() {
                     </td>
 
                     <td className="px-6 py-5">
-                      <PriorityBadge priority={dispute.priority} />
+                      <DifficultyBadge difficulty={dispute.difficulty} />
                     </td>
 
                     <td className="px-6 py-5">
@@ -704,7 +790,11 @@ export default function DisputesPage() {
 
                     <td className="px-6 py-5 text-right">
                       <button
-                        onClick={() => setSelectedDispute(dispute)}
+                        onClick={() => {
+                          setSelectedDispute(dispute);
+                          setResolutionNotes("");
+                          setActionError(null);
+                        }}
                         className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 px-3 text-[11px] font-bold text-slate-600 transition hover:border-[#6B1E2C]/20 hover:bg-[#FDF7F8] hover:text-[#6B1E2C]"
                       >
                         Review
@@ -954,65 +1044,82 @@ export default function DisputesPage() {
                 )}
               </div>
 
-              {/* TIMELINE */}
+              {/* DIFFICULTY BREAKDOWN */}
               <div>
-                <p className="mb-4 text-xs font-extrabold">
-                  Investigation Timeline
-                </p>
-
-                <div className="space-y-5">
-                  <div className="flex gap-3">
-                    <div className="mt-1 h-2.5 w-2.5 rounded-full bg-[#6B1E2C]" />
-
-                    <div>
-                      <p className="text-xs font-bold">Dispute opened</p>
-
-                      <p className="mt-1 text-[10px] text-slate-400">
-                        Buyer mengajukan sengketa
-                      </p>
-                    </div>
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-xs font-extrabold">Difficulty calculation</p>
+                  <div className="flex items-center gap-2">
+                    <DifficultyBadge difficulty={selectedDispute.difficulty} />
+                    <span className="rounded-md bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">
+                      {selectedDispute.difficultyScore} pts
+                    </span>
                   </div>
-
-                  <div className="flex gap-3">
-                    <div className="mt-1 h-2.5 w-2.5 rounded-full bg-amber-500" />
-
-                    <div>
-                      <p className="text-xs font-bold">Transaction frozen</p>
-
-                      <p className="mt-1 text-[10px] text-slate-400">
-                        Dana escrow ditahan sementara
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <div className="mt-1 h-2.5 w-2.5 rounded-full bg-slate-200" />
-
-                    <div>
-                      <p className="text-xs font-bold text-slate-400">
-                        Mediator decision
-                      </p>
-
-                      <p className="mt-1 text-[10px] text-slate-400">
-                        Menunggu keputusan mediator
-                      </p>
-                    </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  {selectedDispute.difficultyReasons.length > 0 ? (
+                    <ul className="space-y-2">
+                      {selectedDispute.difficultyReasons.map((reason, index) => (
+                        <li
+                          key={typeof reason === "string" ? reason : `${reason.factor}-${index}`}
+                          className="flex items-center justify-between text-[10px]"
+                        >
+                          <span className="text-slate-500">
+                            {typeof reason === "string" ? reason : reason.label}
+                          </span>
+                          <span className="font-bold text-[#6B1E2C]">
+                            {typeof reason === "string" ? "included" : `+${reason.points}`}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-[10px] text-slate-400">
+                      Tidak ada faktor tambahan pada dispute ini.
+                    </p>
+                  )}
+                  <div className="mt-3 border-t border-slate-200 pt-3 text-[9px] leading-4 text-slate-400">
+                    Easy 0–3 · Moderate 4–6 · Hard 7–9 · Critical 10+
                   </div>
                 </div>
               </div>
 
               {/* ACTION */}
-              <div className="border-t border-slate-100 pt-6">
+              <div className="border-t border-slate-100">
                 <p className="mb-3 text-xs font-extrabold">Mediator Action</p>
 
                 <div className="space-y-2">
-                  <button className="flex w-full items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100">
-                    Refund to Buyer
+                  <textarea
+                    value={resolutionNotes}
+                    onChange={(event) => setResolutionNotes(event.target.value)}
+                    placeholder="Catatan keputusan mediator (wajib, minimal 10 karakter)..."
+                    className="min-h-24 w-full resize-none rounded-xl border border-slate-200 p-3 text-xs leading-5 outline-none placeholder:text-slate-300 focus:border-[#6B1E2C]"
+                  />
+
+                  {actionError && (
+                    <p className="rounded-lg bg-red-50 px-3 py-2 text-[10px] font-semibold text-red-600">
+                      {actionError}
+                    </p>
+                  )}
+
+                  <button
+                    disabled={selectedDispute.status === "resolved" || resolving !== null}
+                    onClick={() => resolveDispute("refund_buyer")}
+                    className="flex w-full items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {resolving === "refund_buyer"
+                      ? "Processing refund..."
+                      : "Refund to Buyer"}
                     <ChevronRight size={15} />
                   </button>
 
-                  <button className="flex w-full items-center justify-between rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs font-bold text-blue-700 transition hover:bg-blue-100">
-                    Release to Seller
+                  <button
+                    disabled={selectedDispute.status === "resolved" || resolving !== null}
+                    onClick={() => resolveDispute("release_seller")}
+                    className="flex w-full items-center justify-between rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {resolving === "release_seller"
+                      ? "Releasing funds..."
+                      : "Release to Seller"}
                     <ChevronRight size={15} />
                   </button>
 

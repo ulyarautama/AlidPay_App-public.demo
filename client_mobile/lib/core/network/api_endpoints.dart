@@ -21,7 +21,8 @@ class ApiEndpoints {
   static const String unseenCount = '/transaction/unseen-count';
   static const String markSeen = '/transaction/mark-seen';
   static const String updateProfile = '/user/profile';
-  static String dispute(String transactionId) => '/transaction/$transactionId/dispute';
+  static String dispute(String transactionId) =>
+      '/transaction/$transactionId/disputes';
 
   static String getDetailTransaction(String id) => '/transaction/$id';
   static String confirmPayment(String id) => '/transaction/$id/confirm-payment';

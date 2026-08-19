@@ -243,7 +243,7 @@ export default function DashboardPage() {
             </Link>
 
             <Link
-              href="/dashboard/transactions"
+              href="/dashboard/transaction"
               className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
             >
               <CreditCard size={18} />
@@ -579,7 +579,7 @@ export default function DashboardPage() {
               </Link>
 
               <Link
-                href="/dashboard/transactions"
+                href="/dashboard/transaction"
                 className="group flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-100/50"
               >
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-500">
@@ -662,7 +662,7 @@ export default function DashboardPage() {
                 </div>
 
                 <Link
-                  href="/dashboard/transactions"
+                  href="/dashboard/transaction"
                   className="flex items-center gap-1 text-xs font-semibold text-[#6B1E2C] hover:underline"
                 >
                   Lihat semua

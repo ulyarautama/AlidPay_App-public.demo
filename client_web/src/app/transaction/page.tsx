@@ -59,6 +59,7 @@ function formatStatus(status: string) {
     dana_ditahan: "Dana Ditahan",
     barang_dikirim: "Barang Dikirim",
     dana_dicairkan: "Dana Dicairkan",
+    sengketa: "Sedang Ditinjau",
     dibatalkan: "Dibatalkan",
   };
 
@@ -83,6 +84,7 @@ function getStatusStyle(status: string) {
       };
 
     case "dibatalkan":
+    case "sengketa":
       return {
         dot: "bg-[#EF4444]",
         text: "text-[#DC2626]",
@@ -171,7 +173,8 @@ export default function TransactionsPage() {
   }
 
   useEffect(() => {
-    getTransactions();
+    const timeout = window.setTimeout(() => void getTransactions(), 0);
+    return () => window.clearTimeout(timeout);
   }, []);
 
   const totalValue = useMemo(() => {

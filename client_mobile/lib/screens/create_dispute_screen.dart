@@ -133,30 +133,6 @@ class _CreateDisputeScreenState extends State<CreateDisputeScreen> {
             'icon': Icons.format_list_numbered_rounded,
           },
         ];
-
-      case 'pembayaran':
-        return [
-          {
-            'value': 'pembayaran_bermasalah',
-            'title': 'Pembayaran Bermasalah',
-            'description': 'Terdapat masalah terkait pembayaran transaksi.',
-            'icon': Icons.payment_outlined,
-          },
-          {
-            'value': 'nominal_tidak_sesuai',
-            'title': 'Nominal Tidak Sesuai',
-            'description': 'Nominal pembayaran berbeda dengan kesepakatan.',
-            'icon': Icons.price_check_rounded,
-          },
-          {
-            'value': 'status_pembayaran',
-            'title': 'Status Pembayaran Bermasalah',
-            'description':
-                'Pembayaran sudah dilakukan tetapi status belum berubah.',
-            'icon': Icons.sync_problem_rounded,
-          },
-        ];
-
       case 'pihak_transaksi':
         return [
           if (_isBuyer)

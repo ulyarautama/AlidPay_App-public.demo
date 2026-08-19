@@ -10,14 +10,12 @@ import {
   Copy,
   Link2,
   Loader2,
-  MessageCircle,
   RefreshCw,
   Search,
   Send,
   ShieldCheck,
   Sparkles,
   UserRound,
-  X,
 } from "lucide-react";
 import { api } from "../lib/axios";
 import { useAuth } from "../context/AuthContext";
@@ -100,7 +98,6 @@ export default function CreateTransactionPage() {
   const { user } = useAuth();
 
   const isBuyer = user?.role === "pembeli";
-  const userRole = user?.role === "penjual";
 
   const numericAmount = useMemo(
     () => parseRupiah(createTransaction.nominal),
@@ -171,7 +168,7 @@ export default function CreateTransactionPage() {
       );
 
       setStep("success");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
     } finally {
       setLoading(false);
@@ -282,11 +279,6 @@ ${transactionLink}`;
               </span>
             </div>
           </div>
-
-          <div className="flex items-center gap-1.5 text-[10px] font-semibold text-[#75726B] sm:gap-2 sm:text-xs">
-            <ShieldCheck size={14} />
-            <span className="hidden sm:inline">Protected</span>
-          </div>
         </div>
       </header>
 
@@ -366,26 +358,19 @@ function CreateForm({
         <section className="min-w-0">
           {/* HEADER */}
           <div className="mb-8 max-w-[720px] sm:mb-10">
-            <div
-              className="mb-4 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.16em] sm:text-xs"
-              style={{ color: theme.gold }}
-            >
-              <Sparkles size={13} />
-              New transaction
-            </div>
-
             <h1 className="max-w-[700px] text-[38px] font-extrabold leading-[.98] tracking-[-.055em] sm:text-[52px] lg:text-[60px]">
-              Buat transaksi
-              <br />
-              <span style={{ color: theme.orange }}>dengan aman.</span>
+              <span className="inline-flex items-baseline gap-3">
+                <span>Buat</span>
+                <span style={{ color: theme.orange }}>transaksi</span>
+              </span>
             </h1>
 
             <p
               className="mt-5 max-w-[580px] text-[13px] leading-6 sm:mt-6 sm:text-[15px] sm:leading-7"
               style={{ color: theme.secondary }}
             >
-              Buat transaksi AlidPay, tentukan pembeli, lalu review semuanya
-              sebelum transaksi benar-benar dibuat.
+              Buat transaksi AlidPay, tentukan pembeli, lalu review atau bagikan
+              jika menggunakan tautan sebelum transaksi benar benar dibuat.
             </p>
           </div>
 
@@ -448,7 +433,7 @@ function CreateForm({
 
             {/* TITLE */}
             <Field
-              label="BARANG / JASA"
+              label="BARANG, JASA ATAU PESANAN APAPUN"
               name="judul_barang"
               placeholder="Contoh: MacBook Pro M3 — 16GB"
               value={createTransaction.judul_barang}
@@ -457,27 +442,29 @@ function CreateForm({
             />
 
             {/* Lawan Transaksi ID */}
-            <Field
-              label={userRole ? "ID PEMBELI" : "ID PENJUAL"}
-              name="lawan_transaksi_id"
-              placeholder="@ALID-8K4M2P9X"
-              value={createTransaction.lawan_transaksi_id}
-              onChange={onChange}
-              error={errors.counterpartyId}
-              icon={<Search size={16} />}
-              helper={
-                userRole === "penjual"
-                  ? "Minta pembeli membagikan ID AlidPay dari halaman profilnya."
-                  : "Masukkan ID AlidPay penjual."
-              }
-            />
+            {createTransaction.type === "normal" && (
+              <Field
+                label={userRole ? "ID PEMBELI" : "ID PENJUAL"}
+                name="lawan_transaksi_id"
+                placeholder="@ALID-8K4M2P9X"
+                value={createTransaction.lawan_transaksi_id}
+                onChange={onChange}
+                error={errors.counterpartyId}
+                icon={<Search size={16} />}
+                helper={
+                  userRole === "penjual"
+                    ? "Minta pembeli membagikan ID AlidPay dari halaman profilnya."
+                    : "Masukkan ID AlidPay penjual."
+                }
+              />
+            )}
 
             {/* CONTACT */}
             <Field
               name="kontak"
               label="KONTAK PEMBELI"
               optional
-              placeholder="Nomor HP atau nama panggilan"
+              placeholder="Nomor HP atau Nama"
               value={createTransaction.kontak}
               onChange={onChange}
             />
@@ -697,15 +684,47 @@ function Field({
 ========================================================= */
 
 function TransactionAside() {
+  const [previewMode, setPreviewMode] = useState<TransactionType>("normal");
+
+  const normalFlow = [
+    ["01", "Buat transaksi", "Lengkapi detail dan tentukan lawan transaksi"],
+    ["02", "Periksa detail", "Pastikan semua informasi sudah benar"],
+    ["03", "Konfirmasi", "Kedua pihak menyetujui detail transaksi"],
+    ["04", "Pembayaran", "Pembeli melakukan pembayaran"],
+    ["05", "Dana diamankan", "Dana disimpan sementara oleh AlidPay"],
+    ["06", "Diproses", "Penjual memenuhi transaksi yang disepakati"],
+    ["07", "Selesai", "Pembeli mengonfirmasi transaksi telah terpenuhi"],
+    ["08", "Dana diteruskan", "Dana diteruskan kepada penjual"],
+  ];
+
+  const linkFlow = [
+    ["01", "Buat transaksi", "Buat detail transaksi tanpa ID lawan transaksi"],
+    ["02", "Bagikan tautan", "Kirim tautan transaksi kepada lawan transaksi"],
+    [
+      "03",
+      "Buka transaksi",
+      "Lawan transaksi membuka tautan dan melihat detail",
+    ],
+    ["04", "Konfirmasi", "Lawan transaksi menyetujui detail transaksi"],
+    ["05", "Pembayaran", "Pembeli melakukan pembayaran"],
+    ["06", "Dana diamankan", "Dana disimpan sementara oleh AlidPay"],
+    ["07", "Diproses", "Penjual memproses transaksi yang disepakati"],
+    ["08", "Selesai", "Pembeli mengonfirmasi transaksi telah selesai"],
+    ["09", "Dana diteruskan", "Dana diteruskan kepada penjual"],
+  ];
+
+  const flow = previewMode === "normal" ? normalFlow : linkFlow;
+
   return (
-    <div className="sticky top-28">
+    <div>
       <div
-        className="overflow-hidden rounded-xl border sm:rounded-2xl"
+        className="overflow-hidden rounded-xl border"
         style={{
           borderColor: theme.border,
           backgroundColor: "rgba(255,255,255,.3)",
         }}
       >
+        {/* HEADER */}
         <div
           className="p-7"
           style={{
@@ -713,32 +732,73 @@ function TransactionAside() {
             color: theme.bg,
           }}
         >
-          <div className="mb-16 flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-[.18em] opacity-50">
-              ALIDPAY / ESCROW
-            </span>
-
-            <ShieldCheck size={18} />
-          </div>
-
-          <p className="text-xs font-semibold opacity-50">TRANSACTION FLOW</p>
+          <p className="text-xs font-semibold opacity-50">ALUR TRANSAKSI</p>
 
           <h3 className="mt-3 text-3xl font-extrabold leading-tight tracking-[-.04em]">
-            Dari pembayaran
+            Dari kesepakatan
             <br />
             sampai selesai.
           </h3>
         </div>
 
         <div className="p-7">
-          {[
-            ["01", "Create", "Buat detail transaksi"],
-            ["02", "Review", "Pastikan semuanya benar"],
-            ["03", "Pay", "Pembeli melakukan pembayaran"],
-            ["04", "Complete", "Transaksi diselesaikan"],
-          ].map(([number, title, description]) => (
+          {/* PREVIEW MODE SELECTOR */}
+          <div className="mb-5">
+            <p
+              className="mb-2 text-[10px] font-extrabold uppercase tracking-[.14em]"
+              style={{ color: theme.secondary }}
+            >
+              Lihat alur
+            </p>
+
             <div
-              key={number}
+              className="flex rounded-lg border p-1"
+              style={{
+                borderColor: theme.border,
+                backgroundColor: "rgba(24,23,21,.035)",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setPreviewMode("normal")}
+                className="flex-1 rounded-md px-3 py-2 text-[11px] font-bold transition"
+                style={{
+                  backgroundColor:
+                    previewMode === "normal" ? theme.ink : "transparent",
+                  color: previewMode === "normal" ? theme.bg : theme.secondary,
+                }}
+              >
+                Terdaftar
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPreviewMode("tautan")}
+                className="flex-1 rounded-md px-3 py-2 text-[11px] font-bold transition"
+                style={{
+                  backgroundColor:
+                    previewMode === "tautan" ? theme.ink : "transparent",
+                  color: previewMode === "tautan" ? theme.bg : theme.secondary,
+                }}
+              >
+                Tautan
+              </button>
+            </div>
+
+            <p
+              className="mt-2 text-[10px] leading-4"
+              style={{ color: theme.secondary }}
+            >
+              {previewMode === "normal"
+                ? "Alur transaksi dengan pengguna AlidPay terdaftar."
+                : "Alur transaksi melalui tautan untuk pengguna yang belum pernah menggunakan AlidPay"}
+            </p>
+          </div>
+
+          {/* FLOW */}
+          {flow.map(([number, title, description]) => (
+            <div
+              key={`${previewMode}-${number}`}
               className="flex gap-4 border-b py-5 last:border-b-0"
               style={{ borderColor: theme.border }}
             >
@@ -758,14 +818,30 @@ function TransactionAside() {
               </div>
             </div>
           ))}
-        </div>
-      </div>
 
-      <div className="mt-5 flex items-center gap-2 px-2 text-xs">
-        <ShieldCheck size={14} style={{ color: theme.green }} />
-        <span style={{ color: theme.secondary }}>
-          Transaksi dilindungi oleh AlidPay
-        </span>
+          <div
+            className="mt-4 rounded-lg border px-3 py-3"
+            style={{
+              borderColor: theme.border,
+              backgroundColor: "rgba(24,23,21,.025)",
+            }}
+          >
+            <p
+              className="text-[10px] font-extrabold uppercase tracking-[.12em]"
+              style={{ color: theme.secondary }}
+            >
+              Jika terjadi masalah
+            </p>
+
+            <p
+              className="mt-1.5 text-[10px] leading-4"
+              style={{ color: theme.secondary }}
+            >
+              Transaksi dapat masuk ke proses sengketa, pengembalian dana, atau
+              dibatalkan sesuai kondisi transaksi.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -873,7 +949,7 @@ function ReviewTransaction({
               className="text-[10px] font-extrabold tracking-[.14em]"
               style={{ color: theme.secondary }}
             >
-              BARANG / JASA
+              BARANG, JASA ATAU PESANAN APAPUN
             </p>
 
             <h2 className="mt-2 break-words text-xl font-extrabold leading-snug tracking-[-.03em] sm:text-3xl">

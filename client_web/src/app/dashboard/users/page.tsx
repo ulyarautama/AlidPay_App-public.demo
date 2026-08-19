@@ -9,6 +9,7 @@ import {
   ChevronRight,
   CircleDollarSign,
   Clock3,
+  Headphones,
   Mail,
   MoreHorizontal,
   Search,
@@ -19,6 +20,7 @@ import {
   Wallet,
   X,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 type UserRole = "buyer" | "seller" | "both";
@@ -239,6 +241,8 @@ export default function UsersPage() {
   const [status, setStatus] = useState<"all" | UserStatus>("all");
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
+  const router = useRouter();
+
   const filteredUsers = useMemo(() => {
     const keyword = search.toLowerCase();
 
@@ -315,6 +319,15 @@ export default function UsersPage() {
           <ChevronRight size={13} />
           <span className="font-semibold text-[#6B1E2C]">Users</span>
         </div>
+
+        <PeopleTabs
+          active="customers"
+          onChange={(view) => {
+            if (view === "support") {
+              router.push("/dashboard/users/disputeteam");
+            }
+          }}
+        />
 
         {/* TITLE */}
         <div className="mb-8 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
@@ -879,6 +892,44 @@ export default function UsersPage() {
 }
 
 /* COMPONENTS */
+
+function PeopleTabs({
+  active,
+  onChange,
+}: {
+  active: "customers" | "support";
+  onChange: (view: "customers" | "support") => void;
+}) {
+  return (
+    <div className="mb-7 inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+      <button
+        type="button"
+        onClick={() => onChange("customers")}
+        className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition ${
+          active === "customers"
+            ? "bg-[#6B1E2C] text-white shadow-sm"
+            : "text-slate-500 hover:bg-slate-50"
+        }`}
+      >
+        <Users size={15} />
+        Buyer & Seller
+      </button>
+
+      <button
+        type="button"
+        onClick={() => onChange("support")}
+        className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition ${
+          active === "support"
+            ? "bg-[#6B1E2C] text-white shadow-sm"
+            : "text-slate-500 hover:bg-slate-50"
+        }`}
+      >
+        <Headphones size={15} />
+        Dispute Team
+      </button>
+    </div>
+  );
+}
 
 function BellIcon() {
   return (

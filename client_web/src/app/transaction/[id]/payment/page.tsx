@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
-  Clock3,
   CreditCard,
   Landmark,
   Loader2,
@@ -14,8 +13,9 @@ import {
   Wallet,
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../../../lib/axios";
+import { apiErrorMessage } from "../../../lib/transactions";
 
 interface TransactionUser {
   id: string;
@@ -65,7 +65,7 @@ export default function PaymentPage() {
     }).format(value);
   }
 
-  async function getTransaction() {
+  const getTransaction = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
@@ -79,13 +79,14 @@ export default function PaymentPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [transactionId]);
 
   useEffect(() => {
     if (transactionId) {
-      getTransaction();
+      const timeout = window.setTimeout(() => void getTransaction(), 0);
+      return () => window.clearTimeout(timeout);
     }
-  }, [transactionId]);
+  }, [getTransaction, transactionId]);
 
   async function handleSimulationPayment() {
     if (!transaction) return;
@@ -94,13 +95,13 @@ export default function PaymentPage() {
       setPaying(true);
       setError("");
 
-      await api.post(`/api/transaction/${transaction.id}/payment`);
+      await api.patch(`/api/transaction/${transaction.id}/mark-paid-simple`);
 
       router.replace(`/transaction/${transaction.id}`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Gagal melakukan pembayaran:", err);
 
-      setError(err?.response?.data?.message ?? "Pembayaran gagal diproses.");
+      setError(apiErrorMessage(err, "Pembayaran gagal diproses."));
     } finally {
       setPaying(false);
     }
@@ -151,7 +152,7 @@ export default function PaymentPage() {
     );
   }
 
-  const total = Number(transaction.nominal) + Number(transaction.fee);
+  const total = Number(transaction.nominal);
 
   const isPaymentReady = transaction.status === "menunggu_pembayaran";
 
@@ -379,10 +380,12 @@ export default function PaymentPage() {
             </div>
 
             <div className="flex justify-between text-sm">
-              <span className="text-[#75726B]">Biaya layanan</span>
+              <span className="text-[#75726B]">
+                Biaya layanan (dipotong dari penjual)
+              </span>
 
               <span className="font-semibold">
-                {formatRupiah(Number(transaction.fee))}
+                - {formatRupiah(Number(transaction.fee))}
               </span>
             </div>
 

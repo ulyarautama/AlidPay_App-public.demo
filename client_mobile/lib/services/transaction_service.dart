@@ -45,7 +45,7 @@ class TransactionService {
     List<XFile> evidenceFiles = const [],
   }) async {
     try {
-      final data = FormData.fromMap({
+      final formData = FormData.fromMap({
         'category': category,
         'issue_type': issueType,
         'description': description,
@@ -53,22 +53,40 @@ class TransactionService {
       });
 
       for (final file in evidenceFiles) {
-        data.files.add(
+        formData.files.add(
           MapEntry(
-            'evidence[]',
+            'evidence_files[]',
             await MultipartFile.fromFile(file.path, filename: file.name),
           ),
         );
       }
 
-      await DioClient.dio.post(
+      debugPrint('========== DISPUTE REQUEST ==========');
+      debugPrint('Transaction ID: $transactionId');
+      debugPrint('Category: $category');
+      debugPrint('Issue: $issueType');
+      debugPrint('Evidence count: ${evidenceFiles.length}');
+      debugPrint('Multipart files: ${formData.files.length}');
+
+      for (final item in formData.files) {
+        debugPrint('FILE FIELD: ${item.key} -> ${item.value.filename}');
+      }
+
+      final response = await DioClient.dio.post(
         ApiEndpoints.dispute(transactionId),
-        data: data,
+        data: formData,
         options: Options(
+          contentType: 'multipart/form-data',
+          headers: {'Accept': 'application/json'},
           sendTimeout: const Duration(seconds: 60),
           receiveTimeout: const Duration(seconds: 90),
         ),
       );
+
+      debugPrint('========== DISPUTE SUCCESS ==========');
+      debugPrint('Status: ${response.statusCode}');
+      debugPrint('Response: ${response.data}');
+      debugPrint('=====================================');
     } on DioException catch (e) {
       debugPrint('========== DISPUTE ERROR ==========');
       debugPrint('URL: ${e.requestOptions.uri}');
@@ -77,6 +95,7 @@ class TransactionService {
       debugPrint('===================================');
 
       final responseData = e.response?.data;
+
       if (responseData is Map && responseData['message'] != null) {
         throw responseData['message'].toString();
       }
