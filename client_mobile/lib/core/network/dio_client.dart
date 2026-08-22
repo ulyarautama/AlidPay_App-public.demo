@@ -13,7 +13,10 @@ class DioClient {
       baseUrl: ApiEndpoints.baseUrl,
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 10),
-      headers: {"Accept": "application/json"},
+      headers: {
+        "Accept": "application/json",
+        'ngrok-skip-browser-warning': 'true',
+      },
     ),
   );
   // Dio KHUSUS buat manggil endpoint /refresh

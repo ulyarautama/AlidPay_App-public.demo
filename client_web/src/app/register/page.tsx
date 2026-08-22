@@ -5,18 +5,18 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  LockKeyhole,
-  ShieldCheck,
 } from "lucide-react";
 import { ChangeEvent, Suspense, SyntheticEvent, useState } from "react";
 import { api } from "../lib/axios";
 import { useRouter, useSearchParams } from "next/navigation";
+import { safeRedirectPath } from "../lib/navigation";
+import Image from "next/image";
+import { Playfair_Display } from "next/font/google";
 
-const benefits = [
-  "Buat transaksi escrow dengan mudah",
-  "Pantau status transaksi secara real-time",
-  "Dana terlindungi sampai transaksi selesai",
-];
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  weight: ["700", "800", "900"],
+});
 
 function RegisterContent() {
   const [formData, setFormData] = useState({
@@ -28,7 +28,7 @@ function RegisterContent() {
   });
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/";
+  const redirect = safeRedirectPath(searchParams.get("redirect"));
   function handleInputChange(
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) {
@@ -55,19 +55,41 @@ function RegisterContent() {
   }
 
   return (
-    <main className="min-h-dvh bg-[#F5EFE6] text-[#181715] lg:h-dvh lg:overflow-hidden">
-      <div className="mx-auto flex min-h-dvh w-full max-w-7xl flex-col px-4 py-4 sm:px-8 sm:py-6 lg:h-full lg:min-h-0">
+    <main className="min-h-dvh bg-[#F5EFE6] text-[#181715]">
+      <div className="mx-auto flex min-h-dvh w-full max-w-7xl flex-col px-4 py-4 sm:px-8 sm:py-6">
         {/* TOP */}
         <div className="flex shrink-0 items-center justify-between">
+          {/* Logo */}
           <Link
             href="/"
-            className="flex items-center gap-2.5 font-bold tracking-[-0.04em]"
+            className="group hidden items-center gap-2.5 md:flex md:gap-3"
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#181715] text-[#F5EFE6]">
-              A
+            <div className="relative h-10 w-10 shrink-0 md:h-14 md:w-14 lg:h-16 lg:w-16">
+              <Image
+                src="/alidpay-logo.png"
+                alt="AlidPay Logo"
+                fill
+                sizes="(min-width: 1024px) 64px, (min-width: 768px) 56px, 40px"
+                priority
+                className="object-contain transition-transform duration-300 group-hover:-translate-y-0.5"
+                style={{
+                  filter:
+                    "drop-shadow(0 1px 1px rgba(24,23,21,0.30)) drop-shadow(0 6px 8px rgba(24,23,21,0.16))",
+                }}
+              />
             </div>
 
-            <span className="text-lg">AlidPay</span>
+            <div
+              className={`${playfair.className} hidden items-baseline md:flex`}
+            >
+              <span className="text-[25px] font-black leading-none tracking-[-0.065em] text-[#181715] lg:text-[30px]">
+                Alid
+              </span>
+
+              <span className="text-[25px] font-black leading-none tracking-[-0.065em] text-[#C85A28] lg:text-[30px]">
+                Pay
+              </span>
+            </div>
           </Link>
 
           <Link
@@ -80,63 +102,52 @@ function RegisterContent() {
         </div>
 
         {/* CONTENT */}
-        <div className="flex flex-1 items-start justify-center py-4 sm:py-6 lg:min-h-0 lg:items-center">
+        <div className="flex flex-1 items-center justify-center py-6 lg:py-8">
           <div className="mx-auto grid w-full max-w-5xl overflow-hidden rounded-[1.5rem] border border-[#DED9D0] bg-[#EFECE4] shadow-xl shadow-[#181715]/5 sm:rounded-[2rem] lg:grid-cols-[0.9fr_1.1fr]">
             {/* LEFT */}
-            <div className="hidden bg-[#181715] p-10 text-white lg:flex lg:flex-col">
+            <div className="hidden bg-[#181715] p-8 text-white lg:flex lg:flex-col xl:p-10">
               <div>
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#C85A28]">
-                  <ShieldCheck size={22} />
-                </div>
-
-                <p className="mt-8 text-xs font-bold uppercase tracking-[0.16em] text-white/40">
-                  Start with AlidPay
+                <p className="mt-6 text-xs font-bold uppercase tracking-[0.16em] text-white/40">
+                  Mulai dengan membuat akun
                 </p>
 
-                <h1 className="mt-4 text-5xl font-bold leading-[0.95] tracking-[-0.07em]">
-                  Transaksi
+                <h1 className="mt-3 text-4xl font-bold leading-[0.95] tracking-[-0.06em] xl:text-5xl">
+                  Buka akses
                   <br />
-                  lebih aman.
+                  ke AlidPay
                 </h1>
 
-                <p className="mt-6 max-w-sm text-sm leading-6 text-white/45">
-                  Buat akun AlidPay untuk melakukan transaksi, melindungi dana,
-                  dan memastikan proses pembayaran tetap aman dari awal sampai
-                  selesai.
+                <p className="mt-4 max-w-sm text-sm leading-6 text-white/45">
+                  Buat akun, verifikasi email, lalu mulai gunakan seluruh fitur
+                  transaksi AlidPay.
                 </p>
 
-                <div className="mt-8 space-y-3">
-                  {benefits.map((benefit) => (
+                <div className="mt-7 space-y-3">
+                  {[
+                    "Verifikasi akun",
+                    "Mulai transaksi",
+                    "Pantau prosesnya",
+                  ].map((item) => (
                     <div
-                      key={benefit}
-                      className="flex items-start gap-3 border-t border-white/10 pt-3"
+                      key={item}
+                      className="flex items-center gap-3 border-t border-white/10 pt-3"
                     >
-                      <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#C85A28]">
+                      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#C85A28]">
                         <Check size={12} />
                       </div>
 
                       <p className="text-sm font-medium text-white/70">
-                        {benefit}
+                        {item}
                       </p>
                     </div>
                   ))}
                 </div>
               </div>
-
-              {/* LEFT FOOTER */}
-              <div className="mt-auto flex items-center gap-3 pt-10 text-xs text-white/40">
-                <LockKeyhole size={15} />
-                Protected by AlidPay
-              </div>
             </div>
 
             {/* FORM */}
-            <div className="min-w-0 bg-[#F5EFE6] p-5 sm:p-8 lg:p-4">
+            <div className="min-w-0 bg-[#F5EFE6] p-5 sm:p-8 lg:p-10">
               <div className="mx-auto w-full max-w-md">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#C85A28]">
-                  Create account
-                </p>
-
                 <h2 className="mt-2 text-3xl font-bold tracking-[-0.06em] sm:text-4xl">
                   Buat akun AlidPay.
                 </h2>
@@ -205,7 +216,7 @@ function RegisterContent() {
                       </label>
 
                       <span className="text-[10px] text-[#96928A]">
-                        Minimal 8 karakter
+                        Password minimal 8 karakter
                       </span>
                     </div>
 
@@ -313,7 +324,7 @@ function RegisterContent() {
                 <p className="text-center text-sm text-[#75726B]">
                   Sudah punya akun?{" "}
                   <Link
-                    href="/login"
+                    href={`/login?redirect=${encodeURIComponent(redirect)}`}
                     className="font-bold text-[#C85A28] hover:underline"
                   >
                     Masuk
@@ -326,7 +337,7 @@ function RegisterContent() {
 
         {/* PAGE FOOTER */}
         <p className="shrink-0 text-center text-xs text-[#96928A]">
-          © 2026 AlidPay · Safer transactions, made simple.
+          © 2026 AlidPay
         </p>
       </div>
     </main>

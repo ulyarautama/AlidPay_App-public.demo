@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowLeft,
   ArrowRight,
   CheckCircle2,
   Clock3,
@@ -220,22 +221,42 @@ export default function TransactionsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F5EFE6] px-5 pb-20 pt-28 sm:px-8">
-      <div className="mx-auto max-w-5xl">
-        {/* HEADER */}
-        <div>
-          <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#C85A28]">
-            Transaction history
-          </p>
+    <main className="min-h-screen bg-[#F5EFE6] text-[#181715]">
+      {/* BACK HEADER */}
+      <header className="sticky top-0 z-40 border-b border-[#E0DDD5] bg-[#F5EFE6]/90 backdrop-blur-xl">
+        <div className="mx-auto flex h-[72px] max-w-5xl items-center px-5 sm:px-8">
+          <button
+            type="button"
+            onClick={() => window.history.back()}
+            className="group flex items-center gap-2 text-sm font-semibold transition hover:opacity-60"
+          >
+            <ArrowLeft
+              size={17}
+              className="transition-transform group-hover:-translate-x-1"
+            />
 
-          <h1 className="mt-3 text-4xl font-bold tracking-[-0.06em] sm:text-5xl">
-            Semua Transaksi
-          </h1>
+            <span>Kembali</span>
+          </button>
+        </div>
+      </header>
 
-          <p className="mt-3 max-w-xl text-sm leading-6 text-[#75726B]">
-            Pantau seluruh transaksi kamu, mulai dari pembayaran sampai dana
-            berhasil dicairkan.
-          </p>
+      <div className="mx-auto max-w-5xl px-5 pb-20 pt-10 sm:px-8 md:pt-28">
+        <div className="mx-auto max-w-5xl">
+          {/* HEADER */}
+          <div>
+            <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#C85A28]">
+              Riwayat
+            </p>
+
+            <h1 className="mt-3 text-4xl font-bold tracking-[-0.06em] sm:text-5xl">
+              Semua Transaksi
+            </h1>
+
+            <p className="mt-3 max-w-xl text-sm leading-6 text-[#75726B]">
+              Pantau seluruh transaksi kamu, mulai dari pembayaran sampai dana
+              berhasil dicairkan.
+            </p>
+          </div>
         </div>
 
         {/* SUMMARY */}
@@ -350,7 +371,11 @@ export default function TransactionsPage() {
 
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-[#96928A]">
-                            Lawan transaksi
+                            {role === "Penjual"
+                              ? "Pembeli"
+                              : role === "Pembeli"
+                                ? "Penjual"
+                                : "Lawan transaksi"}
                           </p>
 
                           <p className="mt-1 truncate font-bold">
@@ -387,7 +412,7 @@ export default function TransactionsPage() {
                       {/* PRICE */}
                       <div className="md:text-right">
                         <p className="text-xs font-semibold text-[#96928A]">
-                          Transaction value
+                          Nilai transaksi
                         </p>
 
                         <p className="mt-1 text-xl font-bold">
@@ -422,12 +447,6 @@ export default function TransactionsPage() {
                         />
                       </button>
                     </div>
-                  </div>
-
-                  {/* PROTECTION */}
-                  <div className="flex items-center gap-2 border-t border-[#DCD8CF] bg-[#F5EFE6] px-5 py-3 text-[11px] font-semibold text-[#75726B] sm:px-6">
-                    <ShieldCheck size={14} className="text-[#10B981]" />
-                    Transaksi dilindungi oleh sistem keamanan AlidPay.
                   </div>
                 </article>
               );

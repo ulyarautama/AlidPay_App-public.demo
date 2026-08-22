@@ -14,11 +14,11 @@ import {
   Search,
   Send,
   ShieldCheck,
-  Sparkles,
   UserRound,
 } from "lucide-react";
 import { api } from "../lib/axios";
 import { useAuth } from "../context/AuthContext";
+import { apiErrorMessage } from "../lib/transactions";
 
 type Step = "form" | "review" | "success";
 type TransactionType = "normal" | "tautan";
@@ -159,17 +159,26 @@ export default function CreateTransactionPage() {
 
       const transaction = data.transaction;
 
-      setTransactionCode(transaction.share_code ?? transaction.id);
+      if (createTransaction.type === "tautan") {
+        const shareCode = transaction.share_code;
+        const shareUrl = data.web_url ?? data.webUrl;
 
-      setTransactionLink(
-        data.webUrl
-          ? `${window.location.origin}/t/${transaction.share_code}`
-          : "",
-      );
+        if (!shareCode || !shareUrl) {
+          throw new Error("Backend tidak memberikan tautan transaksi yang aman.");
+        }
+
+        setTransactionCode(shareCode);
+        setTransactionLink(shareUrl);
+      } else {
+        setTransactionCode(transaction.id);
+        setTransactionLink("");
+      }
 
       setStep("success");
     } catch (err: unknown) {
-      console.error(err);
+      setErrors({
+        submit: apiErrorMessage(err, "Transaksi gagal dibuat. Silakan coba lagi."),
+      });
     } finally {
       setLoading(false);
     }
@@ -208,7 +217,7 @@ export default function CreateTransactionPage() {
 Produk: ${createTransaction.judul_barang}
 Total: ${formatRupiah(numericAmount)}
 
-Bayar dan lihat detail transaksi:
+Lihat detail dan lanjutkan transaksi:
 ${transactionLink}`;
 
     if (navigator.share) {
@@ -259,26 +268,8 @@ ${transactionLink}`;
               size={17}
               className="transition-transform group-hover:-translate-x-1"
             />
-            <span className="hidden sm:inline">Kembali</span>
+            <span>Kembali</span>
           </button>
-
-          <div className="absolute left-1/2 -translate-x-1/2">
-            <div className="flex items-center gap-2">
-              <div
-                className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-black"
-                style={{
-                  backgroundColor: theme.ink,
-                  color: theme.bg,
-                }}
-              >
-                A
-              </div>
-
-              <span className="hidden text-sm font-extrabold tracking-[-.03em] sm:block">
-                AlidPay
-              </span>
-            </div>
-          </div>
         </div>
       </header>
 
@@ -306,7 +297,9 @@ ${transactionLink}`;
           contact={createTransaction.kontak}
           amount={numericAmount}
           type={createTransaction.type}
+          userRole={user?.role}
           loading={loading}
+          error={errors.submit}
           onBack={() => setStep("form")}
           onConfirm={handleConfirm}
         />
@@ -320,6 +313,7 @@ ${transactionLink}`;
           type={createTransaction.type}
           code={transactionCode}
           link={transactionLink}
+          userRole={user?.role}
           onCopy={() =>
             copyText(transactionLink, "Tautan transaksi berhasil disalin.")
           }
@@ -385,7 +379,11 @@ function CreateForm({
             <ModeButton
               active={createTransaction.type === "normal"}
               icon={<UserRound size={18} />}
-              title="Pembeli terdaftar"
+              title={
+                userRole === "penjual"
+                  ? "Pembeli terdaftar"
+                  : "Penjual terdaftar"
+              }
               description="Sudah punya ID AlidPay"
               onClick={() => onTypeChange("normal")}
             />
@@ -393,8 +391,8 @@ function CreateForm({
             <ModeButton
               active={createTransaction.type === "tautan"}
               icon={<Link2 size={18} />}
-              title="Belum punya akun"
-              description="Kirim tautan pembayaran"
+              title="Melalui tautan"
+              description="Bagikan tautan transaksi"
               onClick={() => onTypeChange("tautan")}
             />
           </div>
@@ -417,15 +415,17 @@ function CreateForm({
 
                 <div className="min-w-0">
                   <p className="text-[13px] font-bold sm:text-sm">
-                    Pembeli tidak perlu punya akun.
+                    Tidak perlu memasukkan ID{" "}
+                    {userRole === "penjual" ? "pembeli" : "penjual"}.
                   </p>
 
                   <p
                     className="mt-1 text-[12px] leading-5 sm:text-[13px] sm:leading-6"
                     style={{ color: theme.secondary }}
                   >
-                    Setelah transaksi dibuat, AlidPay memberikan tautan yang
-                    bisa kamu kirim melalui WhatsApp, SMS, atau platform lain.
+                    {userRole === "penjual"
+                      ? "Setelah transaksi dibuat, bagikan tautan kepada pembeli. Pembeli dapat melihat detail, masuk ke akun, mengonfirmasi transaksi, lalu melanjutkan pembayaran."
+                      : "Setelah transaksi dibuat, bagikan tautan kepada penjual. Penjual dapat melihat detail, masuk ke akun, lalu mengonfirmasi transaksi. Setelah dikonfirmasi, kamu dapat melanjutkan pembayaran."}
                   </p>
                 </div>
               </div>
@@ -444,7 +444,7 @@ function CreateForm({
             {/* Lawan Transaksi ID */}
             {createTransaction.type === "normal" && (
               <Field
-                label={userRole ? "ID PEMBELI" : "ID PENJUAL"}
+                label={userRole === "penjual" ? "ID PEMBELI" : "ID PENJUAL"}
                 name="lawan_transaksi_id"
                 placeholder="@ALID-8K4M2P9X"
                 value={createTransaction.lawan_transaksi_id}
@@ -462,7 +462,9 @@ function CreateForm({
             {/* CONTACT */}
             <Field
               name="kontak"
-              label="KONTAK PEMBELI"
+              label={
+                userRole === "penjual" ? "KONTAK PEMBELI" : "KONTAK PENJUAL"
+              }
               optional
               placeholder="Nomor HP atau Nama"
               value={createTransaction.kontak}
@@ -857,7 +859,9 @@ function ReviewTransaction({
   contact,
   amount,
   type,
+  userRole,
   loading,
+  error,
   onBack,
   onConfirm,
 }: {
@@ -866,7 +870,9 @@ function ReviewTransaction({
   contact: string;
   amount: number;
   type: TransactionType;
+  userRole?: string;
   loading: boolean;
+  error?: string;
   onBack: () => void;
   onConfirm: () => void;
 }) {
@@ -882,7 +888,7 @@ function ReviewTransaction({
             className="text-[11px] font-extrabold uppercase tracking-[.16em]"
             style={{ color: theme.gold }}
           >
-            Step 02 / Review
+            Step 02
           </p>
 
           <span
@@ -894,7 +900,7 @@ function ReviewTransaction({
               color: isGuest ? theme.orange : theme.green,
             }}
           >
-            {isGuest ? "PAYMENT LINK" : "REGISTERED PEMBELI"}
+            {isGuest ? "MELALUI TAUTAN" : "PENGGUNA TERDAFTAR"}
           </span>
         </div>
 
@@ -921,28 +927,6 @@ function ReviewTransaction({
         }}
       >
         <div className="p-5 sm:p-9">
-          {/* RECEIPT HEADER */}
-          <div className="mb-7 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
-            <span
-              className="text-[10px] font-extrabold uppercase tracking-[.16em]"
-              style={{ color: theme.secondary }}
-            >
-              TRANSACTION SUMMARY
-            </span>
-
-            <span
-              className="w-fit rounded-full px-3 py-1.5 text-[9px] font-extrabold tracking-[.05em]"
-              style={{
-                backgroundColor: isGuest
-                  ? "rgba(200,90,40,.1)"
-                  : "rgba(16,185,129,.1)",
-                color: isGuest ? theme.orange : theme.green,
-              }}
-            >
-              {isGuest ? "PAYMENT LINK" : "REGISTERED PEMBELI"}
-            </span>
-          </div>
-
           {/* PRODUCT */}
           <div className="border-b pb-7" style={{ borderColor: theme.border }}>
             <p
@@ -960,19 +944,18 @@ function ReviewTransaction({
           {/* META */}
           <div className="grid sm:grid-cols-2">
             <SummaryItem
-              label={isGuest ? "LAWAN TRANSAKSI" : "PEMBELI"}
-              value={isGuest ? "Ditentukan setelah tautan dibuka" : buyerId}
+              label={userRole === "penjual" ? "ID PEMBELI" : "ID PENJUAL"}
+              value={
+                isGuest
+                  ? `ID ${
+                      userRole === "penjual" ? "pembeli" : "penjual"
+                    } ditentukan setelah tautan dibuka dan pengguna masuk ke akun AlidPay.`
+                  : buyerId
+              }
               italic={isGuest}
             />
 
             <SummaryItem label="KONTAK" value={contact || "Tidak diberikan"} />
-
-            <SummaryItem
-              label="METODE"
-              value={isGuest ? "Tautan pembayaran" : "AlidPay account"}
-            />
-
-            <SummaryItem label="STATUS" value="Menunggu pembayaran" />
           </div>
 
           {/* PRICE */}
@@ -984,8 +967,8 @@ function ReviewTransaction({
 
             <div className="mt-3">
               <PriceRow
-                label="Biaya Layanan AlidPay"
-                value={`+ ${formatRupiah(fee)}`}
+                label="Biaya layanan"
+                value={`- ${formatRupiah(fee)}`}
                 muted
               />
             </div>
@@ -1007,7 +990,7 @@ function ReviewTransaction({
                 className="text-right text-xl font-extrabold tracking-[-.03em] sm:text-2xl"
                 style={{ color: theme.orange }}
               >
-                {formatRupiah(amount + fee)}
+                {formatRupiah(amount)}
               </p>
             </div>
           </div>
@@ -1022,22 +1005,22 @@ function ReviewTransaction({
           }}
         >
           <div className="flex gap-3">
-            <ShieldCheck
-              size={16}
-              className="mt-0.5 shrink-0"
-              style={{ color: theme.gold }}
-            />
-
             <p
               className="text-[11px] leading-5 sm:text-xs"
               style={{ color: theme.secondary }}
             >
               {isGuest
-                ? "Setelah dibuat, kamu akan mendapatkan tautan pembayaran yang bisa dikirim melalui WhatsApp, SMS, atau platform lainnya."
+                ? "Setelah dibuat, kamu akan mendapatkan tautan transaksi. Lawan transaksi dapat membuka detail, login, mengonfirmasi, lalu pembeli melanjutkan pembayaran."
                 : "Dana kamu disimpan aman terlebih dahulu dan transaksi dapat diselesaikan setelah kedua pihak mengonfirmasi."}
             </p>
           </div>
         </div>
+
+        {error && (
+          <p className="border-t border-red-200 bg-red-50 px-5 py-4 text-sm font-semibold text-red-700 sm:px-9">
+            {error}
+          </p>
+        )}
 
         {/* ACTIONS */}
         <div
@@ -1070,7 +1053,7 @@ function ReviewTransaction({
               </>
             ) : (
               <>
-                {isGuest ? "Buat Tautan Pembayaran" : "Buat Transaksi"}
+                {isGuest ? "Buat & Dapatkan Tautan" : "Buat Transaksi"}
                 <Check size={16} />
               </>
             )}
@@ -1155,6 +1138,7 @@ function SuccessTransaction({
   type,
   code,
   link,
+  userRole,
   onCopy,
   onShare,
   onReset,
@@ -1165,6 +1149,7 @@ function SuccessTransaction({
   type: TransactionType;
   code: string;
   link: string;
+  userRole?: string;
   onCopy: () => void;
   onShare: () => void;
   onReset: () => void;
@@ -1181,14 +1166,6 @@ function SuccessTransaction({
         >
           <CheckCircle2 size={32} />
         </div>
-
-        <p
-          className="text-xs font-extrabold uppercase tracking-[.16em]"
-          style={{ color: theme.green }}
-        >
-          Transaction created
-        </p>
-
         <h1 className="mt-4 text-[34px] font-extrabold leading-tight tracking-[-.05em] sm:text-5xl">
           Transaksi berhasil dibuat.
         </h1>
@@ -1198,8 +1175,12 @@ function SuccessTransaction({
           style={{ color: theme.secondary }}
         >
           {type === "tautan"
-            ? "Tautan pembayaran sudah siap. Kirim kepada pembeli untuk melanjutkan transaksi."
-            : "Transaksi berhasil dibuat dan sudah terhubung dengan pembeli."}
+            ? `Tautan transaksi sudah siap. Kirim kepada ${
+                userRole === "penjual" ? "pembeli" : "penjual"
+              } untuk melanjutkan transaksi.`
+            : `Transaksi berhasil dibuat dan sudah terhubung dengan ${
+                userRole === "penjual" ? "pembeli" : "penjual"
+              }.`}
         </p>
       </div>
 
@@ -1227,16 +1208,6 @@ function SuccessTransaction({
                 {code}
               </p>
             </div>
-
-            <div
-              className="rounded-full px-3 py-1.5 text-[10px] font-extrabold"
-              style={{
-                backgroundColor: "rgba(16,185,129,.1)",
-                color: theme.green,
-              }}
-            >
-              CREATED
-            </div>
           </div>
 
           <div
@@ -1250,13 +1221,13 @@ function SuccessTransaction({
               className="text-[10px] font-extrabold tracking-[.14em]"
               style={{ color: theme.secondary }}
             >
-              TRANSACTION
+              TRANSAKSI
             </p>
 
             <p className="mt-2 text-lg font-extrabold">{title}</p>
 
             <p className="mt-1 text-sm" style={{ color: theme.secondary }}>
-              {contact || "Pembeli AlidPay"}
+              {contact || "Kontak tidak diberikan"}
             </p>
 
             <p
@@ -1267,64 +1238,77 @@ function SuccessTransaction({
             </p>
           </div>
 
-          <p
-            className="mb-2 text-[10px] font-extrabold tracking-[.14em]"
-            style={{ color: theme.secondary }}
-          >
-            PAYMENT LINK
-          </p>
+          {type === "tautan" && (
+            <>
+              <p
+                className="mb-2 text-[10px] font-extrabold tracking-[.14em]"
+                style={{ color: theme.secondary }}
+              >
+                TAUTAN TRANSAKSI
+              </p>
 
-          <div
-            className="flex min-w-0 items-center gap-2 rounded-lg border p-2.5 sm:gap-3 sm:p-3"
-            style={{
-              borderColor: theme.border,
-              backgroundColor: "rgba(245,239,230,.65)",
-            }}
-          >
-            <Link2
-              size={17}
-              className="shrink-0"
-              style={{ color: theme.gold }}
-            />
+              <div
+                className="flex min-w-0 items-center gap-2 rounded-lg border p-2.5 sm:gap-3 sm:p-3"
+                style={{
+                  borderColor: theme.border,
+                  backgroundColor: "rgba(245,239,230,.65)",
+                }}
+              >
+                <Link2
+                  size={17}
+                  className="shrink-0"
+                  style={{ color: theme.gold }}
+                />
 
-            <p className="min-w-0 flex-1 break-all text-[11px] font-semibold sm:truncate sm:text-sm">
-              {link}
-            </p>
+                <p className="min-w-0 flex-1 break-all text-[11px] font-semibold sm:truncate sm:text-sm">
+                  {link}
+                </p>
 
-            <button
-              onClick={onCopy}
-              className="shrink-0 rounded-md p-2 transition hover:bg-black/5"
-              title="Copy link"
-            >
-              <Copy size={16} />
-            </button>
-          </div>
+                <button
+                  onClick={onCopy}
+                  className="shrink-0 rounded-md p-2 transition hover:bg-black/5"
+                  title="Salin tautan"
+                >
+                  <Copy size={16} />
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
-        <div
-          className="grid border-t sm:grid-cols-2"
-          style={{
-            borderColor: theme.border,
-          }}
-        >
-          <button
-            onClick={onCopy}
-            className="flex items-center justify-center gap-2 border-b px-5 py-4 text-sm font-extrabold transition hover:bg-white sm:border-b-0 sm:border-r"
+        {type === "tautan" ? (
+          <div
+            className="grid border-t sm:grid-cols-2"
             style={{ borderColor: theme.border }}
           >
-            <Clipboard size={16} />
-            Salin tautan
-          </button>
+            <button
+              onClick={onCopy}
+              className="flex items-center justify-center gap-2 border-b px-5 py-4 text-sm font-extrabold transition hover:bg-white sm:border-b-0 sm:border-r"
+              style={{ borderColor: theme.border }}
+            >
+              <Clipboard size={16} />
+              Salin tautan
+            </button>
 
-          <button
-            onClick={onShare}
-            className="flex items-center justify-center gap-2 px-5 py-4 text-sm font-extrabold text-white transition hover:opacity-90"
-            style={{ backgroundColor: theme.orange }}
+            <button
+              onClick={onShare}
+              className="flex items-center justify-center gap-2 px-5 py-4 text-sm font-extrabold text-white transition hover:opacity-90"
+              style={{ backgroundColor: theme.orange }}
+            >
+              <Send size={16} />
+              Bagikan transaksi
+            </button>
+          </div>
+        ) : (
+          <div
+            className="border-t px-5 py-4 text-center"
+            style={{ borderColor: theme.border }}
           >
-            <Send size={16} />
-            Bagikan transaksi
-          </button>
-        </div>
+            <p className="text-xs font-semibold" style={{ color: theme.secondary }}>
+              Lawan transaksi dapat melihat transaksi ini melalui akun AlidPay mereka.
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="mt-6 flex flex-col items-center justify-between gap-4 sm:flex-row">
@@ -1342,7 +1326,7 @@ function SuccessTransaction({
             style={{ color: theme.secondary }}
           >
             <ShieldCheck size={14} style={{ color: theme.green }} />
-            Pembeli akan diarahkan ke halaman pembayaran AlidPay.
+            Lawan transaksi melihat detail dan login sebelum melanjutkan.
           </p>
         )}
       </div>

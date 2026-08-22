@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowLeft,
   ArrowRight,
   CheckCircle2,
   Clock3,
@@ -205,12 +206,31 @@ export default function RequestsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F5EFE6] px-5 pb-20 pt-28 sm:px-8">
-      <div className="mx-auto max-w-5xl">
+    <main className="min-h-screen bg-[#F5EFE6] text-[#181715]">
+      {/* BACK HEADER */}
+      <header className="sticky top-0 z-40 border-b border-[#E0DDD5] bg-[#F5EFE6]/90 backdrop-blur-xl">
+        <div className="mx-auto flex h-[72px] max-w-5xl items-center px-5 sm:px-8">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="group flex items-center gap-2 text-sm font-semibold transition hover:opacity-60"
+            aria-label="Kembali ke halaman sebelumnya"
+          >
+            <ArrowLeft
+              size={17}
+              className="transition-transform group-hover:-translate-x-1"
+            />
+
+            <span>Kembali</span>
+          </button>
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-5xl px-5 pb-20 pt-10 sm:px-8">
         {/* HEADER */}
         <div>
           <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#C85A28]">
-            Transaction inbox
+            Permintaan transaksi
           </p>
 
           <h1 className="mt-3 text-4xl font-bold tracking-[-0.06em] sm:text-5xl">
@@ -235,7 +255,7 @@ export default function RequestsPage() {
                   : "text-[#96928A] hover:text-[#181715]"
               }`}
             >
-              Transaksi Keluar
+              Transaksi keluar
               {trxKeluar.length > 0 && (
                 <span className="ml-2 rounded-full bg-[#EFECE4] px-2 py-0.5 text-[10px] text-[#75726B]">
                   {trxKeluar.length}
@@ -255,7 +275,7 @@ export default function RequestsPage() {
                   : "text-[#96928A] hover:text-[#181715]"
               }`}
             >
-              Transaksi Masuk
+              Transaksi masuk
               {trxMasuk.length > 0 && (
                 <span className="ml-2 rounded-full bg-[#EFECE4] px-2 py-0.5 text-[10px] text-[#75726B]">
                   {trxMasuk.length}
@@ -288,14 +308,6 @@ export default function RequestsPage() {
             <p className="mt-3 text-3xl font-bold">
               {formatRupiah(totalValue)}
             </p>
-          </div>
-
-          <div className="rounded-2xl border border-[#E0DDD5] bg-[#EFECE4] p-5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[#96928A]">
-              Response time
-            </p>
-
-            <p className="mt-3 text-3xl font-bold">&lt; 1 jam</p>
           </div>
         </div>
 
@@ -334,6 +346,7 @@ export default function RequestsPage() {
                * Apakah user saat ini adalah buyer?
                */
               const isBuyer = transaction.buyer_id === userId;
+              const counterpartRole = isBuyer ? "Penjual" : "Pembeli";
 
               /*
                * Lawan transaksi.
@@ -362,7 +375,7 @@ export default function RequestsPage() {
                       <span className="text-xs font-bold uppercase tracking-[0.12em] text-[#C85A28]">
                         {showActions
                           ? "Menunggu konfirmasi kamu"
-                          : "Menunggu konfirmasi lawan"}
+                          : `Menunggu konfirmasi ${counterpartRole}`}
                       </span>
                     </div>
 
@@ -387,7 +400,7 @@ export default function RequestsPage() {
 
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-[#96928A]">
-                            {showActions ? "Dari" : "Lawan transaksi"}
+                            {showActions ? "Dari" : `${counterpartRole}`}
                           </p>
 
                           <p className="mt-1 truncate font-bold">
@@ -420,7 +433,7 @@ export default function RequestsPage() {
                       {/* PRICE */}
                       <div className="md:text-right">
                         <p className="text-xs font-semibold text-[#96928A]">
-                          Transaction value
+                          Nilai transaksi
                         </p>
 
                         <p className="mt-1 text-xl font-bold">
@@ -466,16 +479,11 @@ export default function RequestsPage() {
                         </div>
                       ) : (
                         <div className="rounded-full bg-[#F5EFE6] px-4 py-2.5 text-xs font-semibold text-[#75726B]">
-                          Menunggu {counterpart?.name ?? "lawan"} konfirmasi
+                          Menunggu {counterpartRole}{" "}
+                          {counterpart?.name ?? "Pengguna"} konfirmasi
                         </div>
                       )}
                     </div>
-                  </div>
-
-                  {/* PROTECTION */}
-                  <div className="flex items-center gap-2 border-t border-[#DCD8CF] bg-[#F5EFE6] px-5 py-3 text-[11px] font-semibold text-[#75726B] sm:px-6">
-                    <ShieldCheck size={14} className="text-[#10B981]" />
-                    Kamu tidak perlu membayar apa pun untuk menerima request.
                   </div>
                 </article>
               );

@@ -42,9 +42,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    refreshUser().finally(() => {
-      setLoading(false);
-    });
+    const timeout = window.setTimeout(() => {
+      void refreshUser().finally(() => {
+        setLoading(false);
+      });
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
   }, []);
 
   function login(user: User) {

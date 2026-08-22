@@ -36,6 +36,8 @@ export type AlidPayTransaction = {
   updated_at: string;
   buyer?: TransactionUser | null;
   seller?: TransactionUser | null;
+  creator?: TransactionUser | null;
+  required_role?: "pembeli" | "penjual";
 };
 
 export const transactionStatuses: Record<

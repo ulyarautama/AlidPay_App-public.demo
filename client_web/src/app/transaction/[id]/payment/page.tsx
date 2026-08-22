@@ -16,6 +16,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../../lib/axios";
 import { apiErrorMessage } from "../../../lib/transactions";
+import { useAuth } from "../../../context/AuthContext";
 
 interface TransactionUser {
   id: string;
@@ -48,6 +49,7 @@ type PaymentMethod = "qris" | "bank" | "ewallet";
 export default function PaymentPage() {
   const params = useParams();
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
 
   const transactionId = params.id as string;
 
@@ -82,11 +84,18 @@ export default function PaymentPage() {
   }, [transactionId]);
 
   useEffect(() => {
-    if (transactionId) {
+    if (!authLoading && !user) {
+      router.replace(
+        `/login?redirect=${encodeURIComponent(`/transaction/${transactionId}/payment`)}`,
+      );
+      return;
+    }
+
+    if (!authLoading && user && transactionId) {
       const timeout = window.setTimeout(() => void getTransaction(), 0);
       return () => window.clearTimeout(timeout);
     }
-  }, [getTransaction, transactionId]);
+  }, [authLoading, getTransaction, router, transactionId, user]);
 
   async function handleSimulationPayment() {
     if (!transaction) return;
@@ -107,7 +116,7 @@ export default function PaymentPage() {
     }
   }
 
-  if (loading) {
+  if (authLoading || !user || loading) {
     return (
       <main className="min-h-screen bg-[#F5EFE6] px-5 pb-20 pt-28 sm:px-8">
         <div className="mx-auto max-w-4xl">

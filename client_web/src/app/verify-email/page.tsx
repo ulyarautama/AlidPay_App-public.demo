@@ -1,17 +1,21 @@
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
+import { safeRedirectPath } from "../lib/navigation";
 import { Suspense, useState } from "react";
 import { ArrowLeft, CheckCircle2, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { api } from "../lib/axios";
+import { useAuth } from "../context/AuthContext";
+import { apiErrorMessage } from "../lib/transactions";
 
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { refreshUser } = useAuth();
 
   const email = searchParams.get("email") ?? "";
-  const redirect = searchParams.get("redirect") || "/";
+  const redirect = safeRedirectPath(searchParams.get("redirect"));
 
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -31,12 +35,11 @@ function VerifyEmailContent() {
         email,
         code,
       });
+      await refreshUser();
 
       router.push(redirect);
-    } catch (err: any) {
-      setError(
-        err?.response?.data?.message ?? "Verifikasi gagal. Silakan coba lagi.",
-      );
+    } catch (err: unknown) {
+      setError(apiErrorMessage(err, "Verifikasi gagal. Silakan coba lagi."));
     } finally {
       setLoading(false);
     }

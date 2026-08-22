@@ -231,7 +231,7 @@ function App() {
                       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#C85A28] text-white">
                         <Plus size={13} strokeWidth={2.5} />
                       </span>
-                      Buat Transaksi
+                      Buat transaksi
                     </Link>
 
                     <Link
@@ -239,7 +239,7 @@ function App() {
                       className="group flex items-center gap-2 rounded-full border border-[#D8D4CB] bg-[#EFECE4] px-4 py-2.5 text-sm font-bold text-[#181715] transition hover:-translate-y-0.5 hover:bg-white"
                     >
                       <WalletCards size={17} />
-                      Semua Transaksi
+                      Semua transaksi
                     </Link>
 
                     <Link
@@ -603,7 +603,7 @@ function App() {
             <div>
               <p className="max-w-3xl text-2xl font-medium leading-[1.35] tracking-[-0.03em] text-[#181715] sm:text-3xl">
                 AlidPay membantu pembeli dan penjual bertransaksi dengan lebih
-                tenang, bahkan ketika belum saling mengenal.
+                terlindungi, bahkan ketika belum saling mengenal.
               </p>
 
               <p className="mt-7 max-w-2xl leading-7 text-[#75726B]">
@@ -617,7 +617,7 @@ function App() {
         </section>
 
         {/* FEATURES */}
-        <section id="keamanan" className="px-5 pb-24 sm:px-8 sm:pb-32">
+        <section id="keamanan" className="px-5 pb-24 sm:px-8 sm:pb-20">
           <div className="mx-auto max-w-7xl">
             <div className="mb-12 flex items-end justify-between gap-8">
               <div>
@@ -762,36 +762,11 @@ function App() {
           </div>
         </section>
 
-        {/* BIG STATEMENT */}
-        <section className="overflow-hidden px-5 py-24 sm:px-8 sm:py-36">
-          <div className="mx-auto max-w-7xl">
-            <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#C85A28]">
-              Cara baru untuk bertransaksi
-            </p>
-
-            <h2 className="mt-7 max-w-6xl text-5xl font-bold leading-[0.92] tracking-[-0.075em] sm:text-7xl lg:text-[6.5rem]">
-              Jangan serahkan semuanya
-              <br />
-              pada rasa percaya.
-              <br />
-              <span className="text-[#C85A28]">Gunakan sistem.</span>
-            </h2>
-          </div>
-        </section>
-
         {/* CTA */}
-        <section className="px-5 pb-24 sm:px-8 sm:pb-32">
+        <section className="px-5 mt-20 pb-24 sm:px-8 sm:pb-15">
           <div className="mx-auto max-w-7xl">
             <div className="relative overflow-hidden rounded-[2rem] bg-[#C85A28] px-7 py-14 text-white sm:px-12 sm:py-20">
-              <div className="absolute -right-10 -top-32 text-[250px] font-black leading-none tracking-[-0.1em] text-white/[0.06]">
-                A
-              </div>
-
               <div className="relative max-w-3xl">
-                <p className="text-sm font-bold uppercase tracking-[0.16em] text-white/60">
-                  Mulai sekarang
-                </p>
-
                 <h2 className="mt-5 text-5xl font-bold leading-[0.95] tracking-[-0.07em] sm:text-7xl">
                   Mulai transaksi
                   <br />
@@ -823,25 +798,38 @@ function App() {
       <footer className="border-t border-[#E0DDD5] px-5 py-10 sm:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#181715] text-xs font-bold text-white">
-                A
+            <a
+              href="#hero"
+              className="group flex items-center gap-2.5 md:gap-3"
+            >
+              <div className="relative h-10 w-10 shrink-0 md:h-12 md:w-12">
+                <Image
+                  src="/alidpay-logo.png"
+                  alt="AlidPay Logo"
+                  fill
+                  sizes="48px"
+                  className="object-contain transition-transform duration-300 group-hover:-translate-y-0.5"
+                  style={{
+                    filter:
+                      "drop-shadow(0 1px 1px rgba(24,23,21,0.30)) drop-shadow(0 5px 7px rgba(24,23,21,0.14))",
+                  }}
+                />
               </div>
 
               <div className={`${playfair.className} flex items-baseline`}>
-                <span className="text-lg font-black tracking-[-0.055em] text-[#181715]">
+                <span className="text-[22px] font-black leading-none tracking-[-0.065em] text-[#181715] md:text-[25px]">
                   Alid
                 </span>
 
-                <span className="text-lg font-black tracking-[-0.055em] text-[#C85A28]">
+                <span className="text-[22px] font-black leading-none tracking-[-0.065em] text-[#C85A28] md:text-[25px]">
                   Pay
                 </span>
               </div>
-            </div>
+            </a>
 
             <p className="mt-3 max-w-xs text-xs leading-5 text-[#96928A]">
               Membantu pembeli dan penjual bertransaksi dengan lebih aman,
-              jelas, dan tenang.
+              jelas, dan terlindungi.
             </p>
           </div>
 

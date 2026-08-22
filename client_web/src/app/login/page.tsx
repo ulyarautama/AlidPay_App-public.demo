@@ -1,11 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, LockKeyhole, ShieldCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+} from "lucide-react";
 import { Suspense, useState } from "react";
 import { api } from "../lib/axios";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
+import Image from "next/image";
+import { Playfair_Display } from "next/font/google";
+import { safeRedirectPath } from "../lib/navigation";
+
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  weight: ["700", "800", "900"],
+});
 
 function LoginContent() {
   const [formData, setFormData] = useState({
@@ -14,7 +26,7 @@ function LoginContent() {
   });
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/";
+  const redirect = safeRedirectPath(searchParams.get("redirect"));
   const { refreshUser } = useAuth();
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     const { name, value } = e.target;
@@ -41,15 +53,37 @@ function LoginContent() {
       <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-5 py-6 sm:px-8">
         {/* TOP */}
         <div className="flex items-center justify-between">
+          {/* Logo */}
           <Link
             href="/"
-            className="flex items-center gap-2.5 font-bold tracking-[-0.04em]"
+            className="group hidden items-center gap-2.5 md:flex md:gap-3"
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#181715] text-[#F5EFE6]">
-              A
+            <div className="relative h-10 w-10 shrink-0 md:h-14 md:w-14 lg:h-16 lg:w-16">
+              <Image
+                src="/alidpay-logo.png"
+                alt="AlidPay Logo"
+                fill
+                sizes="(min-width: 1024px) 64px, (min-width: 768px) 56px, 40px"
+                priority
+                className="object-contain transition-transform duration-300 group-hover:-translate-y-0.5"
+                style={{
+                  filter:
+                    "drop-shadow(0 1px 1px rgba(24,23,21,0.30)) drop-shadow(0 6px 8px rgba(24,23,21,0.16))",
+                }}
+              />
             </div>
 
-            <span className="text-lg">AlidPay</span>
+            <div
+              className={`${playfair.className} hidden items-baseline md:flex`}
+            >
+              <span className="text-[25px] font-black leading-none tracking-[-0.065em] text-[#181715] lg:text-[30px]">
+                Alid
+              </span>
+
+              <span className="text-[25px] font-black leading-none tracking-[-0.065em] text-[#C85A28] lg:text-[30px]">
+                Pay
+              </span>
+            </div>
           </Link>
 
           <Link
@@ -67,45 +101,53 @@ function LoginContent() {
             {/* LEFT */}
             <div className="hidden bg-[#181715] p-10 text-white lg:flex lg:flex-col lg:justify-between">
               <div>
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#C85A28]">
-                  <ShieldCheck size={22} />
-                </div>
-
                 <p className="mt-10 text-xs font-bold uppercase tracking-[0.16em] text-white/40">
-                  Welcome back
+                  Selamat datang di AlidPay
                 </p>
 
-                <h1 className="mt-4 text-5xl font-bold leading-[0.95] tracking-[-0.07em]">
-                  Transaksi
+                <h1 className="mt-3 text-4xl font-bold leading-[0.95] tracking-[-0.06em] xl:text-5xl">
+                  Kembali ke
                   <br />
-                  lebih tenang.
+                  transaksimu.
                 </h1>
 
-                <p className="mt-6 max-w-sm text-sm leading-6 text-white/45">
-                  Masuk ke akun AlidPay untuk membuat transaksi, melihat status
-                  pembayaran, dan mengelola transaksi kamu.
+                <p className="mt-4 max-w-sm text-sm leading-6 text-white/45">
+                  Masuk untuk melihat aktivitas akun dan melanjutkan transaksi
+                  yang sedang berjalan.
                 </p>
-              </div>
 
-              <div className="flex items-center gap-3 text-xs text-white/40">
-                <LockKeyhole size={15} />
-                Protected by AlidPay
+                <div className="mt-7 space-y-3">
+                  {[
+                    "Lihat transaksi aktif",
+                    "Periksa permintaan masuk",
+                    "Lanjutkan proses yang tertunda",
+                  ].map((item) => (
+                    <div
+                      key={item}
+                      className="flex items-center gap-3 border-t border-white/10 pt-3"
+                    >
+                      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#C85A28]">
+                        <Check size={12} />
+                      </div>
+
+                      <p className="text-sm font-medium text-white/70">
+                        {item}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
             {/* FORM */}
-            <div className="bg-[#F5EFE6] p-6 sm:p-10 lg:p-12">
+            <div className="bg-[#F5EFE6] p-6 sm:p-10 lg:p-14">
               <div className="mx-auto max-w-md">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#C85A28]">
-                  Account
-                </p>
-
                 <h2 className="mt-3 text-4xl font-bold tracking-[-0.06em]">
                   Masuk ke AlidPay.
                 </h2>
 
                 <p className="mt-3 text-sm leading-6 text-[#75726B]">
-                  Masukkan akun kamu untuk melanjutkan.
+                  Masuk ke akun untuk melanjutkan.
                 </p>
 
                 <form
@@ -180,7 +222,7 @@ function LoginContent() {
                 <p className="text-center text-sm text-[#75726B]">
                   Belum punya akun?{" "}
                   <Link
-                    href="/register"
+                    href={`/register?redirect=${encodeURIComponent(redirect)}`}
                     className="font-bold text-[#C85A28] hover:underline"
                   >
                     Daftar sekarang
@@ -191,9 +233,7 @@ function LoginContent() {
           </div>
         </div>
 
-        <p className="text-center text-xs text-[#96928A]">
-          © 2026 AlidPay · Safer transactions, made simple.
-        </p>
+        <p className="text-center text-xs text-[#96928A]">© 2026 AlidPay</p>
       </div>
     </main>
   );
