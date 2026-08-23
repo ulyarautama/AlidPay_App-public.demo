@@ -1,5 +1,5 @@
 import { getApps, initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth, type Auth } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -11,6 +11,23 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-const app = getApps()[0] ?? initializeApp(firebaseConfig);
+const requiredFirebaseConfig = {
+  apiKey: firebaseConfig.apiKey,
+  authDomain: firebaseConfig.authDomain,
+  projectId: firebaseConfig.projectId,
+  appId: firebaseConfig.appId,
+};
 
-export const firebaseAuth = getAuth(app);
+export function getFirebaseAuth(): Auth {
+  const missingConfig = Object.entries(requiredFirebaseConfig)
+    .filter(([, value]) => !value?.trim())
+    .map(([key]) => key);
+
+  if (missingConfig.length > 0) {
+    throw new Error(`firebase/config-missing:${missingConfig.join(",")}`);
+  }
+
+  const app = getApps()[0] ?? initializeApp(firebaseConfig);
+
+  return getAuth(app);
+}

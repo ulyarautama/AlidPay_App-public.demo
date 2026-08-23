@@ -9,7 +9,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { useState } from "react";
-import { firebaseAuth } from "../lib/firebase";
+import { getFirebaseAuth } from "../lib/firebase";
 
 type GoogleSignInButtonProps = {
   disabled: boolean;
@@ -21,6 +21,13 @@ const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: "select_account" });
 
 function firebaseErrorMessage(error: unknown) {
+  if (
+    error instanceof Error &&
+    error.message.startsWith("firebase/config-missing:")
+  ) {
+    return "Login Google belum dikonfigurasi pada deployment ini.";
+  }
+
   if (!(error instanceof FirebaseError)) {
     return "Login Google gagal. Silakan coba lagi.";
   }
@@ -34,6 +41,8 @@ function firebaseErrorMessage(error: unknown) {
       return "Domain web ini belum diizinkan di Firebase Authentication.";
     case "auth/operation-not-allowed":
       return "Metode login Google belum diaktifkan di Firebase Authentication.";
+    case "auth/invalid-api-key":
+      return "Konfigurasi Firebase deployment tidak valid. Hubungi pengelola AlidPay.";
     default:
       return "Login Google gagal. Silakan coba lagi.";
   }
@@ -52,8 +61,10 @@ export default function GoogleSignInButton({
 
     setPopupPending(true);
     onError("");
+    let firebaseAuth: ReturnType<typeof getFirebaseAuth> | null = null;
 
     try {
+      firebaseAuth = getFirebaseAuth();
       await setPersistence(firebaseAuth, inMemoryPersistence);
       const result = await signInWithPopup(firebaseAuth, googleProvider);
       const idToken = await result.user.getIdToken(true);
@@ -61,7 +72,9 @@ export default function GoogleSignInButton({
     } catch (error) {
       onError(firebaseErrorMessage(error));
     } finally {
-      await signOut(firebaseAuth).catch(() => undefined);
+      if (firebaseAuth) {
+        await signOut(firebaseAuth).catch(() => undefined);
+      }
       setPopupPending(false);
     }
   }
