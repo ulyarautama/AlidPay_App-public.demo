@@ -8,9 +8,17 @@ class LoginController {
   LoginController(this.repository);
 
   /// Login Manual menggunakan Email & Password
-  Future login({required String email, required String password, required String role }) async {
+  Future login({
+    required String email,
+    required String password,
+    required String role,
+  }) async {
     try {
-      final result = await repository.login(email: email, password: password, role: role);
+      final result = await repository.login(
+        email: email,
+        password: password,
+        role: role,
+      );
       return result;
     } catch (e) {
       rethrow;
@@ -35,23 +43,16 @@ class LoginController {
 
       // Jika user sukses memilih akun Google
       if (googleUser != null) {
-        // Ambil data autentikasi dari akun Google tersebut
-        final String id = googleUser.id;
-        final String name = googleUser.displayName ?? "No Name";
-        final String email = googleUser.email;
-
-        debugPrint("=== DATA GOOGLE LOGIN ===");
-        debugPrint("Name: $name");
-        debugPrint("Email: $email");
-        debugPrint("Photo URL: ${googleUser.photoUrl}");
-        debugPrint("ID Token: ${googleUser.id}");
-        debugPrint("=========================");
+        final String? credential = googleUser.authentication.idToken;
+        if (credential == null || credential.isEmpty) {
+          throw StateError(
+            'Google tidak memberikan ID token. Periksa konfigurasi server client ID.',
+          );
+        }
 
         // 2. Dipanggil lewat objek repository, bukan lewat Class 'AuthApi' langsung
         final backendResponse = await repository.loginGoogleToBackend(
-          id: id,
-          name: name,
-          email: email,
+          credential: credential,
           role: role,
         );
 

@@ -15,13 +15,103 @@
 
 html {
   scroll-behavior: smooth;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body {
   margin: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-x: clip;
   background: #f5efe6;
   color: #181715;
   font-family: "Plus Jakarta Sans", Arial, Helvetica, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/*
+ * Keep every route inside the device viewport. Flex/grid children default to
+ * min-width:auto, which lets long IDs, e-mail addresses, and controls push an
+ * otherwise responsive container wider than the screen.
+ */
+main,
+header,
+footer,
+nav,
+section,
+article,
+aside,
+form,
+div {
+  min-width: 0;
+}
+
+img,
+video,
+canvas,
+iframe {
+  max-width: 100%;
+}
+
+input,
+select,
+textarea,
+button {
+  min-width: 0;
+  max-width: 100%;
+}
+
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+a,
+span,
+label,
+td,
+th {
+  overflow-wrap: anywhere;
+}
+
+/* Wide admin tables scroll inside their own card, never at page level. */
+.overflow-x-auto {
+  max-width: 100%;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/*
+ * A slightly smaller root scale gives compact phones the requested zoomed-out
+ * density while keeping tap targets and the desktop layout unchanged.
+ */
+@media (max-width: 640px) {
+  html {
+    font-size: 14px;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    min-height: 100dvh;
+  }
+}
+
+@media (max-width: 340px) {
+  html {
+    font-size: 13px;
+  }
 }
 
 html::-webkit-scrollbar,

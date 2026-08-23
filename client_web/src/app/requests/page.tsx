@@ -3,8 +3,10 @@
 import {
   ArrowLeft,
   ArrowRight,
+  Check,
   CheckCircle2,
   Clock3,
+  Copy,
   Package,
   ShieldCheck,
   User,
@@ -55,6 +57,7 @@ export default function RequestsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<TabType>("keluar");
@@ -66,9 +69,9 @@ export default function RequestsPage() {
     try {
       setLoading(true);
 
-      const res = await api.get("/api/transaction");
-
-      console.log("TRANSACTIONS:", res.data);
+      const res = await api.get("/api/transaction", {
+        params: { per_page: 100 },
+      });
 
       setRequestsTransaction(res.data.data ?? []);
     } catch (err) {
@@ -84,9 +87,9 @@ export default function RequestsPage() {
   }, []);
 
   /*
-   * Semua transaksi yang masih menunggu konfirmasi.
+   * Transaksi yang sudah memiliki kedua pihak dan menunggu konfirmasi.
    */
-  const allPending = useMemo(() => {
+  const pendingConfirmation = useMemo(() => {
     return requestsTransaction.filter(
       (transaction) => transaction.status === "menunggu_konfirmasi",
     );
@@ -104,10 +107,14 @@ export default function RequestsPage() {
   const trxKeluar = useMemo(() => {
     if (!userId) return [];
 
-    return allPending.filter(
-      (transaction) => transaction.created_by === userId,
+    return requestsTransaction.filter(
+      (transaction) =>
+        transaction.created_by === userId &&
+        (transaction.status === "menunggu_konfirmasi" ||
+          (transaction.type === "tautan" &&
+            transaction.status === "draft_link")),
     );
-  }, [allPending, userId]);
+  }, [requestsTransaction, userId]);
 
   /*
    * Transaksi Masuk:
@@ -121,10 +128,10 @@ export default function RequestsPage() {
   const trxMasuk = useMemo(() => {
     if (!userId) return [];
 
-    return allPending.filter(
+    return pendingConfirmation.filter(
       (transaction) => transaction.created_by !== userId,
     );
-  }, [allPending, userId]);
+  }, [pendingConfirmation, userId]);
 
   /*
    * List yang sedang aktif.
@@ -178,6 +185,28 @@ export default function RequestsPage() {
     }
   }
 
+  async function handleCopyLink(transaction: Transaction) {
+    if (!transaction.share_code) {
+      setError("Tautan transaksi belum tersedia.");
+      return;
+    }
+
+    try {
+      const shareUrl = `${window.location.origin}/alidtransaction/${encodeURIComponent(transaction.share_code)}`;
+      await navigator.clipboard.writeText(shareUrl);
+      setCopiedId(transaction.id);
+      setError(null);
+
+      window.setTimeout(() => {
+        setCopiedId((current) =>
+          current === transaction.id ? null : current,
+        );
+      }, 2_000);
+    } catch {
+      setError("Tautan belum berhasil disalin. Silakan coba lagi.");
+    }
+  }
+
   function formatTime(date: string) {
     const transactionDate = new Date(date);
     const now = new Date();
@@ -212,7 +241,7 @@ export default function RequestsPage() {
         <div className="mx-auto flex h-[72px] max-w-5xl items-center px-5 sm:px-8">
           <button
             type="button"
-            onClick={() => router.back()}
+            onClick={() => router.replace("/")}
             className="group flex items-center gap-2 text-sm font-semibold transition hover:opacity-60"
             aria-label="Kembali ke halaman sebelumnya"
           >
@@ -336,12 +365,16 @@ export default function RequestsPage() {
 
               <p className="mt-2 text-sm text-[#75726B]">
                 {activeTab === "keluar"
-                  ? "Transaksi yang kamu buat dan menunggu konfirmasi lawan akan muncul di sini."
+                  ? "Transaksi normal dan transaksi tautan yang kamu buat akan muncul di sini."
                   : "Transaksi dari lawan yang membutuhkan konfirmasi kamu akan muncul di sini."}
               </p>
             </div>
           ) : (
             activeTransactions.map((transaction) => {
+              const isDraftLink =
+                transaction.type === "tautan" &&
+                transaction.status === "draft_link";
+
               /*
                * Apakah user saat ini adalah buyer?
                */
@@ -360,7 +393,8 @@ export default function RequestsPage() {
                *
                * Kalau transaksi masuk berarti lawan yang membuat.
                */
-              const showActions = transaction.created_by !== userId;
+              const showActions =
+                !isDraftLink && transaction.created_by !== userId;
 
               return (
                 <article
@@ -373,7 +407,9 @@ export default function RequestsPage() {
                       <span className="h-2 w-2 rounded-full bg-[#C85A28]" />
 
                       <span className="text-xs font-bold uppercase tracking-[0.12em] text-[#C85A28]">
-                        {showActions
+                        {isDraftLink
+                          ? "Menunggu pihak kedua membuka tautan"
+                          : showActions
                           ? "Menunggu konfirmasi kamu"
                           : `Menunggu konfirmasi ${counterpartRole}`}
                       </span>
@@ -387,8 +423,15 @@ export default function RequestsPage() {
                   {/* CONTENT */}
                   <div className="p-5 sm:p-6">
                     {/* ROLE */}
-                    <div className="mb-5 inline-flex items-center rounded-full border border-[#D8D4CB] bg-[#F5EFE6] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#75726B]">
-                      Kamu sebagai {isBuyer ? "Pembeli" : "Penjual"}
+                    <div className="mb-5 flex flex-wrap gap-2">
+                      <span className="inline-flex items-center rounded-full border border-[#D8D4CB] bg-[#F5EFE6] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#75726B]">
+                        Kamu sebagai {isBuyer ? "Pembeli" : "Penjual"}
+                      </span>
+                      {transaction.type === "tautan" && (
+                        <span className="inline-flex items-center rounded-full bg-[#C85A28]/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#C85A28]">
+                          Transaksi tautan
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex flex-col gap-6 md:flex-row md:items-center">
@@ -400,11 +443,17 @@ export default function RequestsPage() {
 
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-[#96928A]">
-                            {showActions ? "Dari" : `${counterpartRole}`}
+                            {isDraftLink
+                              ? `Calon ${counterpartRole}`
+                              : showActions
+                                ? "Dari"
+                                : counterpartRole}
                           </p>
 
                           <p className="mt-1 truncate font-bold">
-                            {counterpart?.name ?? "Pengguna"}
+                            {isDraftLink
+                              ? "Belum bergabung"
+                              : counterpart?.name ?? "Pengguna"}
                           </p>
 
                           {counterpart?.public_id && (
@@ -450,7 +499,37 @@ export default function RequestsPage() {
                         {formatTime(transaction.created_at)}
                       </div>
 
-                      {showActions ? (
+                      {isDraftLink ? (
+                        <div className="flex flex-col gap-2 min-[420px]:flex-row">
+                          <button
+                            type="button"
+                            onClick={() => void handleCopyLink(transaction)}
+                            className="flex items-center justify-center gap-2 rounded-full border border-[#D8D4CB] px-4 py-2.5 text-xs font-bold text-[#75726B] transition hover:bg-[#F5EFE6] hover:text-[#181715]"
+                          >
+                            {copiedId === transaction.id ? (
+                              <Check size={14} />
+                            ) : (
+                              <Copy size={14} />
+                            )}
+                            {copiedId === transaction.id
+                              ? "Tautan disalin"
+                              : "Salin tautan"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              router.push(`/transaction/${transaction.id}`)
+                            }
+                            className="group flex items-center justify-center gap-2 rounded-full bg-[#181715] px-5 py-2.5 text-xs font-bold text-white transition hover:-translate-y-0.5 hover:bg-[#2a2926]"
+                          >
+                            Lihat detail
+                            <ArrowRight
+                              size={14}
+                              className="transition-transform group-hover:translate-x-1"
+                            />
+                          </button>
+                        </div>
+                      ) : showActions ? (
                         <div className="flex gap-2">
                           <button
                             type="button"

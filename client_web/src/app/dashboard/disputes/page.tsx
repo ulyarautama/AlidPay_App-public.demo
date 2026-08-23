@@ -34,6 +34,9 @@ type ApiDispute = {
   difficulty_score: number;
   difficulty_reasons: DifficultyReason[];
   status: string;
+  resolution?: "refund_buyer" | "release_seller" | null;
+  resolution_notes?: string | null;
+  resolved_at?: string | null;
   created_at: string;
   updated_at: string;
 
@@ -103,6 +106,10 @@ type Dispute = {
   difficultyScore: number;
   difficultyReasons: DifficultyReason[];
 
+  resolution: "refund_buyer" | "release_seller" | null;
+  resolutionNotes: string | null;
+  resolvedAt: string | null;
+
   createdAt: string;
 };
 
@@ -158,7 +165,7 @@ const difficultyConfig = {
 const categoryLabels: Record<string, string> = {
   barang_jasa: "Barang / Jasa",
   pihak_transaksi: "Pihak Transaksi",
-  aktivitas_mencurigakan: "Aktivitas Mencurigakan",
+  indikasi_penipuan: "Indikasi penipuan",
   lainnya: "Lainnya",
 };
 
@@ -166,7 +173,7 @@ const resolutionLabels: Record<string, string> = {
   refund: "Refund dana kepada pembeli",
   release_seller: "Lepaskan dana kepada penjual",
   resolve_transaction: "Selesaikan transaksi",
-  mediator_decision: "Keputusan mediator",
+  mediator_decision: "Keputusan pihak AlidPay",
 };
 
 function humanize(value: string) {
@@ -228,6 +235,9 @@ export default function DisputesPage() {
     "refund_buyer" | "release_seller" | null
   >(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingResolution, setPendingResolution] = useState<
+    "refund_buyer" | "release_seller" | null
+  >(null);
 
   async function getDisputes(): Promise<ApiDispute[]> {
     const res = await api.get(`/api/admin/disputes`);
@@ -277,36 +287,35 @@ export default function DisputesPage() {
     difficultyScore: Number(dispute.difficulty_score ?? 0),
     difficultyReasons: dispute.difficulty_reasons ?? [],
 
+    resolution: dispute.resolution ?? null,
+    resolutionNotes: dispute.resolution_notes ?? null,
+    resolvedAt: dispute.resolved_at ?? null,
+
     createdAt: new Date(dispute.created_at).toLocaleString("id-ID", {
       dateStyle: "medium",
       timeStyle: "short",
     }),
   }));
 
-  async function resolveDispute(
-    resolution: "refund_buyer" | "release_seller",
-  ) {
+  function requestResolution(resolution: "refund_buyer" | "release_seller") {
     if (!selectedDispute || resolutionNotes.trim().length < 10) {
       setActionError("Catatan keputusan minimal 10 karakter.");
       return;
     }
 
-    const destination =
-      resolution === "refund_buyer" ? "buyer" : "seller";
-    if (
-      !window.confirm(
-        `Konfirmasi perpindahan ${formatRupiah(selectedDispute.amount)} ke ${destination}? Tindakan ini tidak dapat diulang.`,
-      )
-    ) {
-      return;
-    }
+    setActionError(null);
+    setPendingResolution(resolution);
+  }
+
+  async function resolveDispute() {
+    if (!selectedDispute || !pendingResolution) return;
 
     try {
-      setResolving(resolution);
+      setResolving(pendingResolution);
       setActionError(null);
       const response = await api.post(
         `/api/admin/disputes/${selectedDispute.rawId}/resolve`,
-        { resolution, notes: resolutionNotes.trim() },
+        { resolution: pendingResolution, notes: resolutionNotes.trim() },
       );
       const updated = response.data?.data ?? response.data;
       setDisputes((current) =>
@@ -315,12 +324,11 @@ export default function DisputesPage() {
         ),
       );
       setSelectedDispute(null);
+      setPendingResolution(null);
       setResolutionNotes("");
     } catch (caught) {
       const message =
-        typeof caught === "object" &&
-        caught !== null &&
-        "response" in caught
+        typeof caught === "object" && caught !== null && "response" in caught
           ? (caught as { response?: { data?: { message?: string } } }).response
               ?.data?.message
           : null;
@@ -423,7 +431,7 @@ export default function DisputesPage() {
               </div>
 
               <div className="leading-tight">
-                <p className="text-xs font-bold">Mediator</p>
+                <p className="text-xs font-bold">Pihak</p>
                 <p className="text-[10px] text-slate-400">AlidPay Team</p>
               </div>
 
@@ -449,7 +457,7 @@ export default function DisputesPage() {
 
             <p className="mt-2 max-w-xl text-sm leading-6 text-slate-500">
               Pantau, investigasi, dan selesaikan sengketa transaksi yang sedang
-              ditangani mediator AlidPay.
+              ditangani pihak AlidPay.
             </p>
           </div>
 
@@ -503,7 +511,7 @@ export default function DisputesPage() {
             <h3 className="mt-1 text-2xl font-black">7</h3>
 
             <p className="mt-2 text-[11px] text-slate-400">
-              Sedang diperiksa mediator
+              Sedang diperiksa pihak AlidPay
             </p>
           </div>
 
@@ -1001,6 +1009,23 @@ export default function DisputesPage() {
                     {selectedDispute.requestedResolution}
                   </p>
                 </div>
+
+                {selectedDispute.status === "resolved" && (
+                  <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">
+                      Keputusan pihak AlidPay
+                    </p>
+                    <p className="mt-2 text-xs font-extrabold text-slate-800">
+                      {selectedDispute.resolution === "refund_buyer"
+                        ? "Refund dana kepada pembeli"
+                        : "Release dana kepada penjual"}
+                    </p>
+                    <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-600">
+                      {selectedDispute.resolutionNotes ??
+                        "Tidak ada catatan pihak AlidPay."}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* EVIDENCE */}
@@ -1047,7 +1072,9 @@ export default function DisputesPage() {
               {/* DIFFICULTY BREAKDOWN */}
               <div>
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="text-xs font-extrabold">Difficulty calculation</p>
+                  <p className="text-xs font-extrabold">
+                    Difficulty calculation
+                  </p>
                   <div className="flex items-center gap-2">
                     <DifficultyBadge difficulty={selectedDispute.difficulty} />
                     <span className="rounded-md bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">
@@ -1058,19 +1085,29 @@ export default function DisputesPage() {
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                   {selectedDispute.difficultyReasons.length > 0 ? (
                     <ul className="space-y-2">
-                      {selectedDispute.difficultyReasons.map((reason, index) => (
-                        <li
-                          key={typeof reason === "string" ? reason : `${reason.factor}-${index}`}
-                          className="flex items-center justify-between text-[10px]"
-                        >
-                          <span className="text-slate-500">
-                            {typeof reason === "string" ? reason : reason.label}
-                          </span>
-                          <span className="font-bold text-[#6B1E2C]">
-                            {typeof reason === "string" ? "included" : `+${reason.points}`}
-                          </span>
-                        </li>
-                      ))}
+                      {selectedDispute.difficultyReasons.map(
+                        (reason, index) => (
+                          <li
+                            key={
+                              typeof reason === "string"
+                                ? reason
+                                : `${reason.factor}-${index}`
+                            }
+                            className="flex items-center justify-between text-[10px]"
+                          >
+                            <span className="text-slate-500">
+                              {typeof reason === "string"
+                                ? reason
+                                : reason.label}
+                            </span>
+                            <span className="font-bold text-[#6B1E2C]">
+                              {typeof reason === "string"
+                                ? "included"
+                                : `+${reason.points}`}
+                            </span>
+                          </li>
+                        ),
+                      )}
                     </ul>
                   ) : (
                     <p className="text-[10px] text-slate-400">
@@ -1085,13 +1122,13 @@ export default function DisputesPage() {
 
               {/* ACTION */}
               <div className="border-t border-slate-100">
-                <p className="mb-3 text-xs font-extrabold">Mediator Action</p>
+                <p className="mb-3 text-xs font-extrabold">Pihak AlidPay Action</p>
 
                 <div className="space-y-2">
                   <textarea
                     value={resolutionNotes}
                     onChange={(event) => setResolutionNotes(event.target.value)}
-                    placeholder="Catatan keputusan mediator (wajib, minimal 10 karakter)..."
+                    placeholder="Catatan keputusan pihak AlidPay (wajib, minimal 10 karakter)..."
                     className="min-h-24 w-full resize-none rounded-xl border border-slate-200 p-3 text-xs leading-5 outline-none placeholder:text-slate-300 focus:border-[#6B1E2C]"
                   />
 
@@ -1102,8 +1139,11 @@ export default function DisputesPage() {
                   )}
 
                   <button
-                    disabled={selectedDispute.status === "resolved" || resolving !== null}
-                    onClick={() => resolveDispute("refund_buyer")}
+                    disabled={
+                      selectedDispute.status === "resolved" ||
+                      resolving !== null
+                    }
+                    onClick={() => requestResolution("refund_buyer")}
                     className="flex w-full items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {resolving === "refund_buyer"
@@ -1113,8 +1153,11 @@ export default function DisputesPage() {
                   </button>
 
                   <button
-                    disabled={selectedDispute.status === "resolved" || resolving !== null}
-                    onClick={() => resolveDispute("release_seller")}
+                    disabled={
+                      selectedDispute.status === "resolved" ||
+                      resolving !== null
+                    }
+                    onClick={() => requestResolution("release_seller")}
                     className="flex w-full items-center justify-between rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {resolving === "release_seller"
@@ -1131,6 +1174,65 @@ export default function DisputesPage() {
               </div>
             </div>
           </aside>
+        </div>
+      )}
+
+      {pendingResolution && selectedDispute && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="resolution-confirmation-title"
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
+          >
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-50 text-amber-700">
+              <AlertTriangle size={21} />
+            </div>
+            <h2
+              id="resolution-confirmation-title"
+              className="mt-4 text-lg font-black"
+            >
+              Verifikasi keputusan dispute
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              {pendingResolution === "refund_buyer"
+                ? `Lanjutkan refund ${formatRupiah(selectedDispute.amount)} kepada pembeli?`
+                : `Lanjutkan release dana transaksi kepada penjual?`}{" "}
+              Keputusan pihak AlidPay ini final, dicatat ke ledger, dan akan
+              tampil kepada pembeli serta penjual.
+            </p>
+            <div className="mt-4 rounded-xl bg-slate-50 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Catatan pihak AlidPay
+              </p>
+              <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-700">
+                {resolutionNotes.trim()}
+              </p>
+            </div>
+            {actionError && (
+              <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">
+                {actionError}
+              </p>
+            )}
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                disabled={resolving !== null}
+                onClick={() => setPendingResolution(null)}
+                className="rounded-xl border border-slate-200 px-4 py-3 text-xs font-bold text-slate-600 disabled:opacity-50"
+              >
+                Kembali periksa
+              </button>
+              <button
+                type="button"
+                disabled={resolving !== null}
+                onClick={() => void resolveDispute()}
+                className="rounded-xl bg-[#6B1E2C] px-4 py-3 text-xs font-bold text-white disabled:opacity-50"
+              >
+                {resolving ? "Memproses..." : "Ya, lanjutkan"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </main>

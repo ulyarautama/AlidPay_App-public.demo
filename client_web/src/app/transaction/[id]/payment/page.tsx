@@ -16,6 +16,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../../lib/axios";
 import { apiErrorMessage } from "../../../lib/transactions";
+import { redirectProtectedResourceError } from "../../../lib/protected-navigation";
 import { useAuth } from "../../../context/AuthContext";
 
 interface TransactionUser {
@@ -55,6 +56,7 @@ export default function PaymentPage() {
 
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
+  const [redirecting, setRedirecting] = useState(false);
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("qris");
@@ -76,12 +78,22 @@ export default function PaymentPage() {
 
       setTransaction(res.data.transaction ?? res.data.data ?? null);
     } catch (err) {
+      if (
+        redirectProtectedResourceError(
+          err,
+          router,
+          `/transaction/${transactionId}/payment`,
+        )
+      ) {
+        setRedirecting(true);
+        return;
+      }
       console.error("Gagal mengambil transaksi:", err);
       setError("Gagal mengambil detail transaksi.");
     } finally {
       setLoading(false);
     }
-  }, [transactionId]);
+  }, [router, transactionId]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -116,7 +128,7 @@ export default function PaymentPage() {
     }
   }
 
-  if (authLoading || !user || loading) {
+  if (authLoading || !user || loading || redirecting) {
     return (
       <main className="min-h-screen bg-[#F5EFE6] px-5 pb-20 pt-28 sm:px-8">
         <div className="mx-auto max-w-4xl">
@@ -150,7 +162,7 @@ export default function PaymentPage() {
 
             <button
               type="button"
-              onClick={() => router.back()}
+              onClick={() => router.replace("/transaction")}
               className="mt-6 rounded-full bg-[#181715] px-5 py-2.5 text-xs font-bold text-white"
             >
               Kembali
@@ -171,7 +183,7 @@ export default function PaymentPage() {
         <div className="mx-auto max-w-4xl">
           <button
             type="button"
-            onClick={() => router.back()}
+            onClick={() => router.replace(`/transaction/${transaction.id}`)}
             className="group flex items-center gap-2 text-xs font-bold text-[#75726B] hover:text-[#181715]"
           >
             <ArrowLeft
@@ -224,7 +236,7 @@ export default function PaymentPage() {
         {/* HEADER */}
         <div className="mt-8">
           <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#C85A28]">
-            Secure checkout
+            Bayar dengan aman
           </p>
 
           <h1 className="mt-3 text-4xl font-bold tracking-[-0.06em] sm:text-5xl">
@@ -232,7 +244,7 @@ export default function PaymentPage() {
           </h1>
 
           <p className="mt-3 max-w-xl text-sm leading-6 text-[#75726B]">
-            Selesaikan pembayaran agar dana dapat diamankan oleh sistem AlidPay.
+            Selesaikan pembayaran agar dana dapat diamankan oleh AlidPay.
           </p>
         </div>
 
@@ -390,7 +402,7 @@ export default function PaymentPage() {
 
             <div className="flex justify-between text-sm">
               <span className="text-[#75726B]">
-                Biaya layanan (dipotong dari penjual)
+                Biaya layanan
               </span>
 
               <span className="font-semibold">
@@ -445,22 +457,6 @@ export default function PaymentPage() {
             diproses.
           </p>
         </section>
-
-        {/* SECURITY */}
-        <div className="mt-5 flex items-start gap-3 rounded-[1.25rem] border border-[#DCD8CF] bg-[#F5EFE6] px-5 py-4">
-          <ShieldCheck size={17} className="mt-0.5 shrink-0 text-[#10B981]" />
-
-          <div>
-            <p className="text-xs font-bold text-[#181715]">
-              Perlindungan AlidPay
-            </p>
-
-            <p className="mt-1 text-xs leading-5 text-[#75726B]">
-              Dana akan ditahan sampai penjual mengirim barang dan pembeli
-              mengonfirmasi barang telah diterima.
-            </p>
-          </div>
-        </div>
       </div>
     </main>
   );

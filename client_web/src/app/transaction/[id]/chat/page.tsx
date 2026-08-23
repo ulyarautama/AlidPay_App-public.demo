@@ -8,6 +8,7 @@ import {
   transactionStatuses,
   type AlidPayTransaction,
 } from "@/app/lib/transactions";
+import { redirectProtectedResourceError } from "@/app/lib/protected-navigation";
 import {
   ArrowLeft,
   CheckCheck,
@@ -32,6 +33,11 @@ type ChatMessage = {
   sender_id: string;
   sender_name: string;
   message: string;
+  message_type: "user" | "transaction_status";
+  metadata?: {
+    status?: AlidPayTransaction["status"];
+    resolution?: "refund_buyer" | "release_seller";
+  } | null;
   is_read: boolean;
   created_at: string;
 };
@@ -46,6 +52,7 @@ function TransactionChatContent() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [redirecting, setRedirecting] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -63,12 +70,22 @@ function TransactionChatContent() {
         setMessages(response.data?.data ?? []);
         setError(null);
       } catch (caught) {
+        if (
+          redirectProtectedResourceError(
+            caught,
+            router,
+            `/transaction/${params.id}/chat`,
+          )
+        ) {
+          setRedirecting(true);
+          return;
+        }
         if (!silent) setError(apiErrorMessage(caught, "Gagal memuat chat."));
       } finally {
         if (!silent) setLoading(false);
       }
     },
-    [params.id],
+    [params.id, router],
   );
 
   useEffect(() => {
@@ -76,9 +93,19 @@ function TransactionChatContent() {
       void Promise.all([
         fetchTransaction(params.id).then(setTransaction),
         loadMessages(),
-      ]).catch((caught) =>
-        setError(apiErrorMessage(caught, "Chat tidak tersedia.")),
-      );
+      ]).catch((caught) => {
+        if (
+          redirectProtectedResourceError(
+            caught,
+            router,
+            `/transaction/${params.id}/chat`,
+          )
+        ) {
+          setRedirecting(true);
+          return;
+        }
+        setError(apiErrorMessage(caught, "Chat tidak tersedia."));
+      });
     }, 0);
 
     const interval = window.setInterval(() => void loadMessages(true), 5000);
@@ -86,7 +113,7 @@ function TransactionChatContent() {
       window.clearTimeout(initialLoad);
       window.clearInterval(interval);
     };
-  }, [loadMessages, params.id]);
+  }, [loadMessages, params.id, router]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -122,10 +149,21 @@ function TransactionChatContent() {
         : transaction.buyer
       : null;
 
+  if (redirecting) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#F5EFE6]">
+        <Loader2 size={28} className="animate-spin text-[#C85A28]" />
+      </main>
+    );
+  }
+
   return (
-    <main className="min-h-screen bg-[#F5EFE6] px-4 pb-8 pt-20 sm:px-8">
-      <div className="mx-auto flex min-h-[calc(100vh-7rem)] max-w-5xl flex-col overflow-hidden rounded-[1.75rem] border border-[#DCD8CF] bg-[#EFECE4] shadow-xl shadow-black/5">
-        <header className="flex items-center justify-between gap-4 border-b border-[#DCD8CF] bg-[#181715] px-5 py-4 text-white sm:px-6">
+    <main className="h-dvh w-full overflow-hidden bg-[#EFECE4]">
+      <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#EFECE4]">
+        <header
+          className="flex shrink-0 items-center justify-between gap-4 border-b border-white/10 bg-[#181715] px-4 pb-4 pt-4 text-white sm:px-6 lg:px-8"
+          style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}
+        >
           <div className="flex min-w-0 items-center gap-3">
             <button
               onClick={() => router.push(`/transaction/${params.id}`)}
@@ -147,7 +185,39 @@ function TransactionChatContent() {
           )}
         </header>
 
-        <section className="flex-1 space-y-4 overflow-y-auto p-5 sm:p-7">
+        {transaction && (
+          <button
+            type="button"
+            onClick={() => router.push(`/transaction/${transaction.id}`)}
+            className="flex shrink-0 items-center justify-between gap-4 border-b border-[#DCD8CF] bg-[#F5EFE6] px-4 py-3 text-left transition hover:bg-white sm:px-6 sm:py-4 lg:px-8"
+          >
+            <div className="min-w-0">
+              <p className="text-[9px] font-black uppercase tracking-[0.14em] text-[#96928A]">
+                Pesanan yang ditanyakan
+              </p>
+              <p className="mt-1 truncate text-sm font-bold text-[#181715]">
+                {transaction.judul_barang}
+              </p>
+              <p className="mt-1 truncate text-[10px] text-[#75726B]">
+                {transaction.share_code ?? transaction.id}
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-xs font-black text-[#C85A28]">
+                {new Intl.NumberFormat("id-ID", {
+                  style: "currency",
+                  currency: "IDR",
+                  maximumFractionDigits: 0,
+                }).format(transaction.nominal)}
+              </p>
+              <p className="mt-1 text-[9px] font-bold text-[#75726B]">
+                Lihat detail pesanan →
+              </p>
+            </div>
+          </button>
+        )}
+
+        <section className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:px-8 lg:py-7">
           {loading ? (
             <div className="flex h-full items-center justify-center">
               <Loader2 size={24} className="animate-spin text-[#C85A28]" />
@@ -164,6 +234,27 @@ function TransactionChatContent() {
             </div>
           ) : (
             messages.map((item) => {
+              if (item.message_type === "transaction_status") {
+                return (
+                  <div key={item.id} className="flex justify-center py-1">
+                    <div className="max-w-xl rounded-2xl border border-[#D8D4CB] bg-white/70 px-4 py-3 text-center shadow-sm">
+                      <div className="flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-[0.13em] text-[#C85A28]">
+                        Pembaruan pesanan
+                      </div>
+                      <p className="mt-2 whitespace-pre-wrap text-xs font-semibold leading-5 text-[#4F4C46]">
+                        {item.message}
+                      </p>
+                      <p className="mt-2 text-[9px] text-[#96928A]">
+                        {new Date(item.created_at).toLocaleString("id-ID", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+
               const own = item.sender_id === user?.id;
               return (
                 <div
@@ -171,7 +262,7 @@ function TransactionChatContent() {
                   className={`flex ${own ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`max-w-[82%] rounded-2xl px-4 py-3 sm:max-w-[68%] ${own ? "rounded-br-md bg-[#181715] text-white" : "rounded-bl-md border border-[#DCD8CF] bg-[#F5EFE6] text-[#181715]"}`}
+                    className={`max-w-[85%] rounded-2xl px-4 py-3 sm:max-w-[72%] lg:max-w-2xl ${own ? "rounded-br-md bg-[#181715] text-white" : "rounded-bl-md border border-[#DCD8CF] bg-[#F5EFE6] text-[#181715]"}`}
                   >
                     {!own && (
                       <p className="mb-1.5 text-[9px] font-bold uppercase tracking-wide text-[#C85A28]">
@@ -199,14 +290,15 @@ function TransactionChatContent() {
         </section>
 
         {error && (
-          <div className="border-t border-red-100 bg-red-50 px-5 py-3 text-xs font-semibold text-red-600">
+          <div className="shrink-0 border-t border-red-100 bg-red-50 px-4 py-3 text-xs font-semibold text-red-600 sm:px-6 lg:px-8">
             {error}
           </div>
         )}
 
         <form
           onSubmit={sendMessage}
-          className="flex items-end gap-3 border-t border-[#DCD8CF] bg-[#F5EFE6] p-4 sm:p-5"
+          className="flex shrink-0 items-end gap-3 border-t border-[#DCD8CF] bg-[#F5EFE6] px-3 pb-3 pt-3 sm:px-6 sm:pb-5 sm:pt-4 lg:px-8"
+          style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
         >
           <textarea
             value={message}
@@ -218,8 +310,8 @@ function TransactionChatContent() {
               }
             }}
             maxLength={2000}
-            placeholder="Tulis pesan..."
-            className="max-h-36 min-h-12 flex-1 resize-none rounded-2xl border border-[#D8D4CB] bg-white px-4 py-3 text-sm outline-none focus:border-[#181715]"
+            placeholder={`Tanyakan pesanan ${transaction?.judul_barang ?? "ini"}...`}
+            className="max-h-36 min-h-12 min-w-0 flex-1 resize-none rounded-2xl border border-[#D8D4CB] bg-white px-4 py-3 text-base outline-none focus:border-[#181715] sm:text-sm"
           />
           <button
             disabled={sending || !message.trim()}

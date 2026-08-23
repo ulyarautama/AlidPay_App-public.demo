@@ -239,11 +239,6 @@ export default function SharedTransactionPage() {
                 </Link>
               </p>
             )}
-
-            <div className="flex gap-3 rounded-xl bg-[#EDF6EA] p-4 text-xs leading-5 text-[#356337]">
-              <ShieldCheck className="mt-0.5 shrink-0" size={18} />
-              Pembayaran hanya tersedia untuk akun pembeli setelah kedua pihak terhubung dan detail transaksi dikonfirmasi.
-            </div>
           </div>
         </div>
       </section>

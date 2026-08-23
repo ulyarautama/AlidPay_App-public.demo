@@ -305,7 +305,7 @@ https://alidpay.com
 Keamanan Transaksi:
 1. AlidPay TIDAK PERNAH meminta OTP, password, atau PIN via WhatsApp/Telepon
 2. Pastikan website beralamat https://alidpay.com
-3. Dana Anda aman sampai barang diterima
+3. Dana Anda aman sampai pesanan diterima dengan baik
 
 Butuh bantuan? Hubungi CS AlidPay: -.
 Terima kasih telah bertransaksi dengan AlidPay.

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { ChangeEvent, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
@@ -13,7 +14,6 @@ import {
   RefreshCw,
   Search,
   Send,
-  ShieldCheck,
   UserRound,
 } from "lucide-react";
 import { api } from "../lib/axios";
@@ -80,11 +80,13 @@ function calculateServiceFee(amount: number) {
 }
 
 export default function CreateTransactionPage() {
+  const router = useRouter();
   const [step, setStep] = useState<Step>("form");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [transactionCode, setTransactionCode] = useState("");
   const [transactionLink, setTransactionLink] = useState("");
+  const [transactionShareText, setTransactionShareText] = useState("");
   const [createTransaction, setCreateTransaction] = useState<CreateTransaction>(
     {
       judul_barang: "",
@@ -162,13 +164,17 @@ export default function CreateTransactionPage() {
       if (createTransaction.type === "tautan") {
         const shareCode = transaction.share_code;
         const shareUrl = data.web_url ?? data.webUrl;
+        const shareText = data.share_text;
 
-        if (!shareCode || !shareUrl) {
-          throw new Error("Backend tidak memberikan tautan transaksi yang aman.");
+        if (!shareCode || !shareUrl || !shareText) {
+          throw new Error(
+            "Backend tidak memberikan tautan dan template transaksi yang lengkap.",
+          );
         }
 
         setTransactionCode(shareCode);
         setTransactionLink(shareUrl);
+        setTransactionShareText(shareText);
       } else {
         setTransactionCode(transaction.id);
         setTransactionLink("");
@@ -177,7 +183,10 @@ export default function CreateTransactionPage() {
       setStep("success");
     } catch (err: unknown) {
       setErrors({
-        submit: apiErrorMessage(err, "Transaksi gagal dibuat. Silakan coba lagi."),
+        submit: apiErrorMessage(
+          err,
+          "Transaksi gagal dibuat. Silakan coba lagi.",
+        ),
       });
     } finally {
       setLoading(false);
@@ -199,6 +208,7 @@ export default function CreateTransactionPage() {
 
     setTransactionCode("");
     setTransactionLink("");
+    setTransactionShareText("");
     setErrors({});
   }
 
@@ -212,23 +222,30 @@ export default function CreateTransactionPage() {
   }
 
   async function shareTransaction() {
-    const text = `Halo! Saya membuat transaksi melalui AlidPay.
-
-Produk: ${createTransaction.judul_barang}
-Total: ${formatRupiah(numericAmount)}
-
-Lihat detail dan lanjutkan transaksi:
-${transactionLink}`;
+    if (!transactionShareText) {
+      alert("Template pesan transaksi tidak tersedia.");
+      return;
+    }
 
     if (navigator.share) {
       await navigator.share({
         title: "Transaksi AlidPay",
-        text,
-        url: transactionLink,
+        text: transactionShareText,
       });
     } else {
-      await copyText(text, "Pesan transaksi berhasil disalin.");
+      await copyText(transactionShareText, "Pesan transaksi berhasil disalin.");
     }
+  }
+  function copyShareText() {
+    if (!transactionShareText) {
+      alert("Template pesan transaksi tidak tersedia.");
+      return;
+    }
+
+    void copyText(
+      transactionShareText,
+      "Template pesan transaksi berhasil disalin.",
+    );
   }
 
   function handleAmountChange(e: ChangeEvent<HTMLInputElement>) {
@@ -259,7 +276,7 @@ ${transactionLink}`;
               if (step === "review") {
                 setStep("form");
               } else {
-                window.history.back();
+                router.replace("/");
               }
             }}
             className="group flex items-center gap-2 text-sm font-semibold transition hover:opacity-60"
@@ -313,10 +330,9 @@ ${transactionLink}`;
           type={createTransaction.type}
           code={transactionCode}
           link={transactionLink}
+          shareText={transactionShareText}
           userRole={user?.role}
-          onCopy={() =>
-            copyText(transactionLink, "Tautan transaksi berhasil disalin.")
-          }
+          onCopy={copyShareText}
           onShare={shareTransaction}
           onReset={reset}
         />
@@ -949,7 +965,9 @@ function ReviewTransaction({
                 isGuest
                   ? `ID ${
                       userRole === "penjual" ? "pembeli" : "penjual"
-                    } ditentukan setelah tautan dibuka dan pengguna masuk ke akun AlidPay.`
+                    } ditentukan setelah tautan dibuka dan ${
+                      userRole === "penjual" ? "pembeli" : "penjual"
+                    } mengonfirmasi`
                   : buyerId
               }
               italic={isGuest}
@@ -993,26 +1011,6 @@ function ReviewTransaction({
                 {formatRupiah(amount)}
               </p>
             </div>
-          </div>
-        </div>
-
-        {/* INFO */}
-        <div
-          className="border-t px-5 py-5 sm:px-9"
-          style={{
-            borderColor: theme.border,
-            backgroundColor: "rgba(239,236,228,.45)",
-          }}
-        >
-          <div className="flex gap-3">
-            <p
-              className="text-[11px] leading-5 sm:text-xs"
-              style={{ color: theme.secondary }}
-            >
-              {isGuest
-                ? "Setelah dibuat, kamu akan mendapatkan tautan transaksi. Lawan transaksi dapat membuka detail, login, mengonfirmasi, lalu pembeli melanjutkan pembayaran."
-                : "Dana kamu disimpan aman terlebih dahulu dan transaksi dapat diselesaikan setelah kedua pihak mengonfirmasi."}
-            </p>
           </div>
         </div>
 
@@ -1138,6 +1136,7 @@ function SuccessTransaction({
   type,
   code,
   link,
+  shareText,
   userRole,
   onCopy,
   onShare,
@@ -1149,6 +1148,7 @@ function SuccessTransaction({
   type: TransactionType;
   code: string;
   link: string;
+  shareText: string;
   userRole?: string;
   onCopy: () => void;
   onShare: () => void;
@@ -1247,38 +1247,34 @@ function SuccessTransaction({
                 TAUTAN TRANSAKSI
               </p>
 
-              <div
-                className="flex min-w-0 items-center gap-2 rounded-lg border p-2.5 sm:gap-3 sm:p-3"
-                style={{
-                  borderColor: theme.border,
-                  backgroundColor: "rgba(245,239,230,.65)",
-                }}
+              <button
+                onClick={onCopy}
+                className="shrink-0 rounded-md p-2 transition hover:bg-black/5"
+                title="Salin template pesan"
               >
-                <Link2
-                  size={17}
-                  className="shrink-0"
-                  style={{ color: theme.gold }}
-                />
+                <Copy size={16} />
+              </button>
 
-                <p className="min-w-0 flex-1 break-all text-[11px] font-semibold sm:truncate sm:text-sm">
-                  {link}
-                </p>
-
-                <button
-                  onClick={onCopy}
-                  className="shrink-0 rounded-md p-2 transition hover:bg-black/5"
-                  title="Salin tautan"
-                >
-                  <Copy size={16} />
-                </button>
+              <div className="mt-4 rounded-xl border border-[#D8D4CB] bg-white/60 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[10px] font-extrabold tracking-[.14em] text-[#75726B]">
+                    TEMPLATE PESAN
+                  </p>
+                  <span className="rounded-full bg-[#E8F5EC] px-2.5 py-1 text-[9px] font-bold text-[#397253]">
+                    Siap dikirim
+                  </span>
+                </div>
+                <pre className="mt-3 max-h-52 overflow-y-auto whitespace-pre-wrap break-words font-sans text-[11px] leading-5 text-[#4F4C46]">
+                  {shareText || "Template pesan sedang disiapkan."}
+                </pre>
               </div>
             </>
           )}
         </div>
 
-        {type === "tautan" ? (
+        {type === "tautan" && (
           <div
-            className="grid border-t sm:grid-cols-2"
+            className="grid border-t sm:grid-cols-3"
             style={{ borderColor: theme.border }}
           >
             <button
@@ -1287,7 +1283,7 @@ function SuccessTransaction({
               style={{ borderColor: theme.border }}
             >
               <Clipboard size={16} />
-              Salin tautan
+              Salin template
             </button>
 
             <button
@@ -1298,15 +1294,6 @@ function SuccessTransaction({
               <Send size={16} />
               Bagikan transaksi
             </button>
-          </div>
-        ) : (
-          <div
-            className="border-t px-5 py-4 text-center"
-            style={{ borderColor: theme.border }}
-          >
-            <p className="text-xs font-semibold" style={{ color: theme.secondary }}>
-              Lawan transaksi dapat melihat transaksi ini melalui akun AlidPay mereka.
-            </p>
           </div>
         )}
       </div>
@@ -1319,16 +1306,6 @@ function SuccessTransaction({
           <RefreshCw size={15} />
           Buat transaksi lain
         </button>
-
-        {type === "tautan" && (
-          <p
-            className="flex items-center gap-2 text-xs"
-            style={{ color: theme.secondary }}
-          >
-            <ShieldCheck size={14} style={{ color: theme.green }} />
-            Lawan transaksi melihat detail dan login sebelum melanjutkan.
-          </p>
-        )}
       </div>
     </div>
   );

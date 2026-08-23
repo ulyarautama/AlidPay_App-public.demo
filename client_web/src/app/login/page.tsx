@@ -6,13 +6,15 @@ import {
   ArrowRight,
   Check,
 } from "lucide-react";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import axios from "axios";
 import { api } from "../lib/axios";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
 import Image from "next/image";
 import { Playfair_Display } from "next/font/google";
 import { safeRedirectPath } from "../lib/navigation";
+import GoogleSignInButton from "./GoogleSignInButton";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -24,10 +26,31 @@ function LoginContent() {
     email: "",
     password: "",
   });
+  const [googleRole, setGoogleRole] = useState<"pembeli" | "penjual">("pembeli");
+  const [submitting, setSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = safeRedirectPath(searchParams.get("redirect"));
-  const { refreshUser } = useAuth();
+  const addingAccount = searchParams.get("add_account") === "1";
+  const { refreshUser, user } = useAuth();
+
+  useEffect(() => {
+    if (user && !addingAccount) {
+      router.replace(redirect);
+    }
+  }, [addingAccount, redirect, router, user]);
+
+  function getErrorMessage(err: unknown) {
+    if (axios.isAxiosError(err)) {
+      return err.response?.data?.message
+        ?? Object.values(err.response?.data?.errors ?? {}).flat().join(" ")
+        ?? "Login gagal. Periksa data lalu coba lagi.";
+    }
+
+    return "Login gagal. Silakan coba lagi.";
+  }
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     const { name, value } = e.target;
     setFormData((prevData) => ({
@@ -39,14 +62,46 @@ function LoginContent() {
     e: React.SyntheticEvent<HTMLFormElement>,
   ) {
     e.preventDefault();
+    setSubmitting(true);
+    setError(null);
     try {
       await api.get("/sanctum/csrf-cookie");
       await api.post("/api/login", formData);
       await refreshUser();
-      router.push(redirect);
+      router.replace(redirect);
+      router.refresh();
     } catch (err) {
-      console.error(err);
+      setError(getErrorMessage(err));
+    } finally {
+      setSubmitting(false);
     }
+  }
+
+  async function handleFirebaseIdToken(idToken: string) {
+    setGoogleSubmitting(true);
+    setError(null);
+    try {
+      await api.get("/sanctum/csrf-cookie");
+      await api.post("/api/login-firebase", {
+        id_token: idToken,
+        role: googleRole,
+      });
+      await refreshUser();
+      router.replace(redirect);
+      router.refresh();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setGoogleSubmitting(false);
+    }
+  }
+
+  if (user && !addingAccount) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#F5EFE6] text-sm font-semibold text-[#75726B]">
+        Mengarahkan ke akunmu...
+      </main>
+    );
   }
   return (
     <main className="min-h-screen bg-[#F5EFE6] text-[#181715]">
@@ -143,11 +198,13 @@ function LoginContent() {
             <div className="bg-[#F5EFE6] p-6 sm:p-10 lg:p-14">
               <div className="mx-auto max-w-md">
                 <h2 className="mt-3 text-4xl font-bold tracking-[-0.06em]">
-                  Masuk ke AlidPay.
+                  {addingAccount ? "Tambahkan akun AlidPay." : "Masuk ke AlidPay."}
                 </h2>
 
                 <p className="mt-3 text-sm leading-6 text-[#75726B]">
-                  Masuk ke akun untuk melanjutkan.
+                  {addingAccount
+                    ? "Verifikasi akun satu kali agar bisa dipilih langsung di perangkat ini."
+                    : "Masuk ke akun untuk melanjutkan."}
                 </p>
 
                 <form
@@ -203,9 +260,10 @@ function LoginContent() {
 
                   <button
                     type="submit"
+                    disabled={submitting || googleSubmitting}
                     className="group flex w-full items-center justify-center gap-2 rounded-xl bg-[#181715] px-5 py-3.5 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-[#2A2926]"
                   >
-                    Masuk
+                    {submitting ? "Memproses..." : "Masuk"}
                     <ArrowRight
                       size={16}
                       className="transition-transform group-hover:translate-x-1"
@@ -219,13 +277,50 @@ function LoginContent() {
                   <div className="h-px flex-1 bg-[#DED9D0]" />
                 </div>
 
-                <p className="text-center text-sm text-[#75726B]">
+                <div>
+                  <p className="text-center text-[10px] font-bold uppercase tracking-[0.14em] text-[#96928A]">
+                    Untuk akun Google baru, pilih peran
+                  </p>
+                  <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-[#EFECE4] p-1">
+                    {(["pembeli", "penjual"] as const).map((role) => (
+                      <button
+                        key={role}
+                        type="button"
+                        onClick={() => setGoogleRole(role)}
+                        aria-pressed={googleRole === role}
+                        className={`rounded-lg px-4 py-2.5 text-xs font-bold capitalize transition ${
+                          googleRole === role
+                            ? "bg-white text-[#181715] shadow-sm"
+                            : "text-[#96928A] hover:text-[#181715]"
+                        }`}
+                      >
+                        {role}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <GoogleSignInButton
+                    disabled={submitting || googleSubmitting}
+                    onIdToken={handleFirebaseIdToken}
+                    onError={(message) => setError(message || null)}
+                  />
+                </div>
+
+                {error ? (
+                  <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-xs leading-5 text-red-700">
+                    {error}
+                  </p>
+                ) : null}
+
+                <p className="mt-7 text-center text-sm text-[#75726B]">
                   Belum punya akun?{" "}
                   <Link
                     href={`/register?redirect=${encodeURIComponent(redirect)}`}
                     className="font-bold text-[#C85A28] hover:underline"
                   >
-                    Daftar sekarang
+                    Daftar dengan akun AlidPay
                   </Link>
                 </p>
               </div>

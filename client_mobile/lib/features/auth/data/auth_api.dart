@@ -48,15 +48,13 @@ class AuthApi {
 
   /// Verifikasi Token Google ke Backend AlidPay
   Future<Map<String, dynamic>> loginGoogleToBackend({
-    required String id,
-    required String name,
-    required String email,
+    required String credential,
     required String role,
   }) async {
     try {
       final response = await DioClient.dio.post(
         ApiEndpoints.googleLogin,
-        data: {'name': name, 'id': id, 'email': email, 'role': role},
+        data: {'credential': credential, 'role': role},
       );
       final atResp = response.data['access_token'] as String?;
       final rtResp = response.data['refresh_token'] as String?;
@@ -67,12 +65,6 @@ class AuthApi {
         );
         await TokenStorage.saveUserId(response.data['user']['id']);
       }
-      final at = await TokenStorage.getAccessToken();
-      final rt = await TokenStorage.getRefreshToken();
-      debugPrint("ACCESS TOKEN: $at");
-      debugPrint("REFRESH TOKEN: $rt");
-
-      debugPrint("BACKEND GOOGLE LOGIN RESPONSE: ${response.data}");
       return response.data;
     } on DioException catch (e) {
       // PENTING: Cetak response data dari server di sini

@@ -548,8 +548,8 @@ export default function TransactionsPage() {
                 </p>
 
                 <p className="mt-1 text-[11px] leading-5 text-red-600">
-                  Beberapa transaksi sedang dalam proses dispute. Pastikan
-                  mediator segera melakukan investigasi.
+                  Beberapa transaksi sedang dalam proses dispute. Pastikan pihak
+                  AlidPay segera melakukan investigasi.
                 </p>
               </div>
             </div>

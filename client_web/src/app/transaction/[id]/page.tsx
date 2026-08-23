@@ -15,6 +15,7 @@ import {
   transactionStep,
   transactionTimeline,
 } from "@/app/lib/transactions";
+import { redirectProtectedResourceError } from "@/app/lib/protected-navigation";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -27,8 +28,6 @@ import {
   Loader2,
   MessageCircle,
   Package,
-  RefreshCcw,
-  ShieldCheck,
   Store,
   UserRound,
   Wallet,
@@ -46,9 +45,13 @@ function TransactionDetailContent() {
     null,
   );
   const [loading, setLoading] = useState(true);
+  const [redirecting, setRedirecting] = useState(false);
   const [processing, setProcessing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<
+    "receive" | "dispute" | null
+  >(null);
 
   const loadTransaction = useCallback(async () => {
     try {
@@ -56,11 +59,23 @@ function TransactionDetailContent() {
       setError(null);
       setTransaction(await fetchTransaction(transactionId));
     } catch (caught) {
+      if (
+        redirectProtectedResourceError(
+          caught,
+          router,
+          `/transaction/${transactionId}`,
+          "/transaction",
+          false,
+        )
+      ) {
+        setRedirecting(true);
+        return;
+      }
       setError(apiErrorMessage(caught, "Gagal mengambil detail transaksi."));
     } finally {
       setLoading(false);
     }
-  }, [transactionId]);
+  }, [router, transactionId]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -99,39 +114,28 @@ function TransactionDetailContent() {
     return null;
   }, [transaction, user]);
 
-  if (authLoading || loading) return <TransactionLoading />;
+  if (authLoading || loading || redirecting) return <TransactionLoading />;
   if (!transaction || !user || !role) {
     return <TransactionError message={error ?? "Transaksi tidak ditemukan."} />;
   }
 
   const status = transactionStatuses[transaction.status];
   const isCreator = transaction.created_by === user.id;
-  const counterpart = role === "buyer" ? transaction.seller : transaction.buyer;
   const sellerReceives = Math.max(
     0,
     Number(transaction.nominal) - Number(transaction.fee),
   );
   const currentStep = transactionStep(transaction.status);
-  const hideActionPanel =
-    transaction.status === "menunggu_konfirmasi" && isCreator;
+  const showActionPanel =
+    (transaction.status === "menunggu_konfirmasi" && !isCreator) ||
+    (transaction.status === "menunggu_pembayaran" && role === "buyer") ||
+    (transaction.status === "dana_ditahan" && role === "seller") ||
+    (transaction.status === "barang_dikirim" && role === "buyer") ||
+    ["sengketa", "dana_dicairkan", "dibatalkan"].includes(transaction.status);
 
-    const openChat = canOpenChat(transaction.status)
-      ? () => router.push(`/transaction/${transaction.id}/chat`)
-      : undefined;
-
-  const nextTitle = nextActionTitle(
-    transaction,
-    role,
-    isCreator,
-    counterpart?.name,
-  );
-
-  const nextDescription = nextActionDescription(
-    transaction,
-    role,
-    isCreator,
-    counterpart?.name,
-  );
+  const openChat = canOpenChat(transaction.status)
+    ? () => router.push(`/transaction/${transaction.id}/chat`)
+    : undefined;
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#F5EFE6] px-4 pb-16 pt-8 text-[#181715] sm:px-8 sm:pb-24 sm:pt-12 lg:pt-24">
@@ -192,12 +196,134 @@ function TransactionDetailContent() {
           </div>
         )}
 
-        <div
-          className={`mt-6 grid gap-5 sm:mt-8 ${
-            hideActionPanel ? "lg:grid-cols-1" : "lg:grid-cols-[1.2fr_0.8fr]"
-          }`}
-        >
+        <div className="mt-6 sm:mt-8">
           <div className="space-y-5">
+            {showActionPanel && (
+              <aside className="order-first space-y-5 lg:order-none">
+                <section className="rounded-[1.75rem] border border-[#DCD8CF] bg-[#181715] p-6 text-white shadow-xl shadow-black/10 sm:p-7">
+                  <div className="space-y-3">
+                    {transaction.status === "menunggu_konfirmasi" &&
+                      !isCreator && (
+                        <>
+                          <ActionButton
+                            label="Konfirmasi transaksi"
+                            icon={<CheckCircle2 size={17} />}
+                            loading={processing === "confirm"}
+                            onClick={() =>
+                              void runAction(
+                                "confirm",
+                                () => confirmTransaction(transaction.id),
+                                "Transaksi berhasil dikonfirmasi.",
+                              )
+                            }
+                          />
+                          <ActionButton
+                            label="Tolak transaksi"
+                            icon={<XCircle size={17} />}
+                            secondary
+                            danger
+                            loading={processing === "reject"}
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Tolak transaksi “${transaction.judul_barang}”?`,
+                                )
+                              )
+                                void runAction(
+                                  "reject",
+                                  () => rejectTransaction(transaction.id),
+                                  "Transaksi berhasil ditolak.",
+                                );
+                            }}
+                          />
+                        </>
+                      )}
+                    {transaction.status === "menunggu_pembayaran" &&
+                      role === "buyer" && (
+                        <ActionButton
+                          label="Bayar sekarang"
+                          icon={<Wallet size={17} />}
+                          onClick={() =>
+                            router.push(
+                              `/transaction/${transaction.id}/payment`,
+                            )
+                          }
+                        />
+                      )}
+                    {transaction.status === "dana_ditahan" &&
+                      role === "seller" && (
+                        <ActionButton
+                          label="Tandai pesanan sudah dikirim"
+                          icon={<Package size={17} />}
+                          loading={processing === "ship"}
+                          onClick={() =>
+                            void runAction(
+                              "ship",
+                              () => markTransactionShipped(transaction.id),
+                              "pesanan berhasil ditandai sudah dikirim.",
+                            )
+                          }
+                        />
+                      )}
+                    {transaction.status === "barang_dikirim" &&
+                      role === "buyer" && (
+                        <>
+                          <ActionButton
+                            label="Konfirmasi terima & cairkan dana"
+                            icon={<CheckCircle2 size={17} />}
+                            loading={processing === "receive"}
+                            onClick={() => setConfirmation("receive")}
+                          />
+                          <ActionButton
+                            label="Ada masalah? Ajukan dispute"
+                            icon={<AlertTriangle size={17} />}
+                            secondary
+                            danger
+                            onClick={() => setConfirmation("dispute")}
+                          />
+                        </>
+                      )}
+                    {transaction.status === "sengketa" && (
+                      <ActionButton
+                        label="Lihat proses pihak AlidPay"
+                        icon={<Headphones size={17} />}
+                        secondary
+                        onClick={() =>
+                          setNotice(
+                            "Dispute sedang ditinjau pihak AlidPay. Keputusan dan catatan pihak AlidPay akan tampil di halaman ini serta di chat pesanan.",
+                          )
+                        }
+                      />
+                    )}
+                    {transaction.status === "dana_dicairkan" && (
+                      <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm font-semibold leading-6 text-emerald-200">
+                        {transaction.dispute?.resolution === "release_seller"
+                          ? "Sesuai keputusan pihak AlidPay, dana dilepaskan kepada penjual dan transaksi dinyatakan selesai."
+                          : "Transaksi selesai. Dana sudah dicairkan ke penjual."}
+                        {transaction.dispute?.resolution_notes && (
+                          <p className="mt-3 border-t border-emerald-300/20 pt-3 text-xs font-medium text-emerald-100">
+                            Catatan pihak AlidPay:{" "}
+                            {transaction.dispute.resolution_notes}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {transaction.status === "dibatalkan" && (
+                      <div className="rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-sm font-semibold leading-6 text-red-200">
+                        {transaction.dispute?.resolution === "refund_buyer"
+                          ? "Transaksi ini telah dibatalkan sesuai keputusan pihak AlidPay. Dana dikembalikan kepada pembeli."
+                          : "Transaksi ini telah dibatalkan dan tidak dapat dilanjutkan."}
+                        {transaction.dispute?.resolution_notes && (
+                          <p className="mt-3 border-t border-red-300/20 pt-3 text-xs font-medium text-red-100">
+                            Catatan: {transaction.dispute.resolution_notes}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </aside>
+            )}
             <section className="rounded-[1.75rem] border border-[#DCD8CF] bg-[#EFECE4] p-6 sm:p-7">
               <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F5EFE6]">
@@ -299,224 +425,110 @@ function TransactionDetailContent() {
               </div>
             </section>
           </div>
-
-          {!hideActionPanel && (
-            <aside className="order-first space-y-5 lg:order-none">
-              <section className="rounded-[1.75rem] border border-[#DCD8CF] bg-[#181715] p-6 text-white shadow-xl shadow-black/10 sm:p-7">
-                <h2 className="text-2xl font-bold tracking-tight">
-                  {nextTitle}
-                </h2>
-
-                {nextDescription && (
-                  <p className="mt-3 text-sm leading-6 text-white/50">
-                    {nextDescription}
-                  </p>
-                )}
-
-                <div className="mt-7 space-y-3">
-                  {transaction.status === "menunggu_konfirmasi" &&
-                    !isCreator && (
-                      <>
-                        <ActionButton
-                          label="Konfirmasi transaksi"
-                          icon={<CheckCircle2 size={17} />}
-                          loading={processing === "confirm"}
-                          onClick={() =>
-                            void runAction(
-                              "confirm",
-                              () => confirmTransaction(transaction.id),
-                              "Transaksi berhasil dikonfirmasi.",
-                            )
-                          }
-                        />
-                        <ActionButton
-                          label="Tolak transaksi"
-                          icon={<XCircle size={17} />}
-                          secondary
-                          danger
-                          loading={processing === "reject"}
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                `Tolak transaksi “${transaction.judul_barang}”?`,
-                              )
-                            )
-                              void runAction(
-                                "reject",
-                                () => rejectTransaction(transaction.id),
-                                "Transaksi berhasil ditolak.",
-                              );
-                          }}
-                        />
-                      </>
-                    )}
-                  {transaction.status === "menunggu_pembayaran" &&
-                    role === "buyer" && (
-                      <ActionButton
-                        label="Bayar sekarang"
-                        icon={<Wallet size={17} />}
-                        onClick={() =>
-                          router.push(`/transaction/${transaction.id}/payment`)
-                        }
-                      />
-                    )}
-                  {transaction.status === "dana_ditahan" &&
-                    role === "seller" && (
-                      <ActionButton
-                        label="Tandai barang sudah dikirim"
-                        icon={<Package size={17} />}
-                        loading={processing === "ship"}
-                        onClick={() =>
-                          void runAction(
-                            "ship",
-                            () => markTransactionShipped(transaction.id),
-                            "Barang berhasil ditandai sudah dikirim.",
-                          )
-                        }
-                      />
-                    )}
-                  {transaction.status === "barang_dikirim" &&
-                    role === "buyer" && (
-                      <>
-                        <ActionButton
-                          label="Konfirmasi terima & cairkan dana"
-                          icon={<CheckCircle2 size={17} />}
-                          loading={processing === "receive"}
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                "Pastikan pesanan sudah diterima dengan baik. Cairkan dana ke penjual?",
-                              )
-                            )
-                              void runAction(
-                                "receive",
-                                () =>
-                                  confirmTransactionReceived(transaction.id),
-                                "Penerimaan dikonfirmasi. Dana dicairkan ke penjual.",
-                              );
-                          }}
-                        />
-                        <ActionButton
-                          label="Ada masalah? Ajukan dispute"
-                          icon={<AlertTriangle size={17} />}
-                          secondary
-                          danger
-                          onClick={() =>
-                            router.push(
-                              `/transaction/${transaction.id}/dispute`,
-                            )
-                          }
-                        />
-                      </>
-                    )}
-                  {transaction.status === "sengketa" && (
-                    <ActionButton
-                      label="Lihat status dispute"
-                      icon={<Headphones size={17} />}
-                      secondary
-                      onClick={() =>
-                        setNotice("Dispute sedang ditinjau mediator AlidPay.")
-                      }
-                    />
-                  )}
-                  {transaction.status === "dana_dicairkan" && (
-                    <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm font-semibold text-emerald-200">
-                      Transaksi selesai. Dana sudah dicairkan ke penjual.
-                    </div>
-                  )}
-                  {transaction.status === "dibatalkan" && (
-                    <div className="rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-sm font-semibold text-red-200">
-                      Transaksi ini telah dibatalkan dan tidak dapat
-                      dilanjutkan.
-                    </div>
-                  )}
-                </div>
-              </section>
-            </aside>
-          )}
         </div>
       </div>
+
+      {confirmation && (
+        <ConfirmationDialog
+          action={confirmation}
+          transactionTitle={transaction.judul_barang}
+          onCancel={() => setConfirmation(null)}
+          onContinue={() => {
+            setConfirmation(null);
+
+            if (confirmation === "receive") {
+              void runAction(
+                "receive",
+                () => confirmTransactionReceived(transaction.id),
+                "Penerimaan dikonfirmasi. Dana dicairkan ke penjual.",
+              );
+              return;
+            }
+
+            router.push(`/transaction/${transaction.id}/dispute`);
+          }}
+        />
+      )}
     </main>
   );
 }
 
-function nextActionTitle(
-  transaction: AlidPayTransaction,
-  role: "buyer" | "seller",
-  isCreator: boolean,
-  counterpart?: string,
-) {
-  if (transaction.status === "menunggu_konfirmasi") {
-    if (!isCreator) {
-      return "Periksa dan konfirmasi";
-    }
+function ConfirmationDialog({
+  action,
+  transactionTitle,
+  onCancel,
+  onContinue,
+}: {
+  action: "receive" | "dispute";
+  transactionTitle: string;
+  onCancel: () => void;
+  onContinue: () => void;
+}) {
+  const isDispute = action === "dispute";
 
-    const counterpartRole = role === "buyer" ? "Penjual" : "Pembeli";
-    const counterpartName = counterpart ? ` ${counterpart}` : "";
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
+      onClick={onCancel}
+    >
+      <section
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirmation-title"
+        aria-describedby="confirmation-description"
+        onClick={(event) => event.stopPropagation()}
+        className="w-full max-w-md rounded-[1.75rem] border border-[#DCD8CF] bg-[#F5EFE6] p-6 text-[#181715] shadow-2xl sm:p-7"
+      >
+        <div
+          className={`flex h-12 w-12 items-center justify-center rounded-2xl ${
+            isDispute
+              ? "bg-red-100 text-red-600"
+              : "bg-emerald-100 text-emerald-700"
+          }`}
+        >
+          {isDispute ? <AlertTriangle size={22} /> : <CheckCircle2 size={22} />}
+        </div>
 
-    return `Menunggu konfirmasi ${counterpartRole}${counterpartName}`;
-  }
+        <h2 id="confirmation-title" className="mt-5 text-xl font-bold">
+          {isDispute ? "Ajukan dispute?" : "Konfirmasi pesanan diterima?"}
+        </h2>
+        <p
+          id="confirmation-description"
+          className="mt-2 text-sm leading-6 text-[#75726B]"
+        >
+          {isDispute
+            ? "Kamu akan melanjutkan ke formulir dispute untuk transaksi"
+            : "Pastikan pesanan sudah diterima dengan baik. Dana akan dicairkan ke penjual untuk transaksi"}{" "}
+          <strong className="font-bold text-[#181715]">
+            “{transactionTitle}”
+          </strong>
+          . Ingin melanjutkan?
+        </p>
 
-  if (transaction.status === "menunggu_pembayaran") {
-    return role === "buyer"
-      ? "Selesaikan pembayaran"
-      : "Menunggu pembayaran buyer";
-  }
-
-  if (transaction.status === "dana_ditahan") {
-    return role === "seller"
-      ? "Kirim barang atau jasa"
-      : "Dana sudah diamankan";
-  }
-
-  if (transaction.status === "barang_dikirim") {
-    return role === "buyer"
-      ? "Periksa pesanan Anda"
-      : "Menunggu konfirmasi buyer";
-  }
-
-  if (transaction.status === "dana_dicairkan") return "Transaksi selesai";
-  if (transaction.status === "sengketa") return "Dalam penanganan mediator";
-  if (transaction.status === "dibatalkan") return "Transaksi dibatalkan";
-
-  return "Bagikan tautan transaksi";
-}
-
-function nextActionDescription(
-  transaction: AlidPayTransaction,
-  role: "buyer" | "seller",
-  isCreator: boolean,
-  counterpart?: string,
-): string | null {
-  if (transaction.status === "menunggu_konfirmasi") {
-    return isCreator
-      ? null
-      : "Pastikan judul, pihak, dan nominal sudah benar sebelum menyetujui.";
-  }
-
-  if (transaction.status === "menunggu_pembayaran") {
-    return role === "buyer"
-      ? "Lakukan pembayaran agar dana masuk ke escrow AlidPay."
-      : "Anda akan mendapat notifikasi setelah dana buyer diamankan.";
-  }
-
-  if (transaction.status === "dana_ditahan") {
-    return role === "seller"
-      ? "Dana sudah aman. Kirim pesanan lalu tandai sebagai dikirim."
-      : "Tunggu penjual mengirim pesanan Anda.";
-  }
-
-  if (transaction.status === "barang_dikirim") {
-    return role === "buyer"
-      ? "Konfirmasi hanya jika pesanan sudah sesuai. Ajukan dispute bila bermasalah."
-      : "Dana cair setelah buyer mengonfirmasi penerimaan.";
-  }
-
-  if (transaction.status === "sengketa") {
-    return "Dana dibekukan sampai mediator mengambil keputusan.";
-  }
-
-  return transactionStatuses[transaction.status].label;
+        <div className="mt-7 grid gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-xl border border-[#D8D4CB] px-4 py-3 text-xs font-bold transition hover:bg-[#EFECE4]"
+          >
+            Tidak, kembali
+          </button>
+          <button
+            type="button"
+            autoFocus
+            onClick={onContinue}
+            className={`rounded-xl px-4 py-3 text-xs font-bold text-white transition ${
+              isDispute
+                ? "bg-red-600 hover:bg-red-700"
+                : "bg-[#181715] hover:bg-[#2A2926]"
+            }`}
+          >
+            Ya, lanjutkan
+          </button>
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function ActionButton({
@@ -676,7 +688,7 @@ function TransactionError({ message }: { message: string }) {
         <h1 className="mt-4 text-xl font-bold">Transaksi tidak tersedia</h1>
         <p className="mt-2 text-sm leading-6 text-[#75726B]">{message}</p>
         <button
-          onClick={() => router.push("/transaction")}
+          onClick={() => router.replace("/transaction")}
           className="mt-6 rounded-full bg-[#181715] px-6 py-3 text-xs font-bold text-white"
         >
           Kembali ke transaksi

@@ -8,7 +8,6 @@ import {
   ChevronRight,
   LockKeyhole,
   ShieldCheck,
-  Sparkles,
   WalletCards,
   Zap,
   UserPlus,
@@ -16,12 +15,14 @@ import {
   Settings,
   Bell,
   Inbox,
+  Copy,
 } from "lucide-react";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "./context/AuthContext";
 import { api } from "./lib/axios";
+import { useActivityIndicators } from "./hooks/useActivityIndicators";
 import Image from "next/image";
 import { Playfair_Display } from "next/font/google";
 
@@ -104,11 +105,35 @@ const tutorialSlides = [
   },
 ];
 
+function youtubeEmbedUrl(value?: string) {
+  if (!value) return null;
+
+  try {
+    const url = new URL(value);
+    const videoId = url.hostname.includes("youtu.be")
+      ? url.pathname.slice(1).split("/")[0]
+      : url.searchParams.get("v") ??
+        url.pathname.match(/\/(?:embed|shorts)\/([^/?]+)/)?.[1];
+
+    return videoId
+      ? `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1`
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function App() {
-  const { isLoggedIn, user, refreshUser } = useAuth();
+  const { isLoggedIn, user, logout, loading: authLoading } = useAuth();
   const [profileOpen, setProfileOpen] = useState(false);
-  const pendingRequests = 2;
+  const [alidPayIdCopied, setAlidPayIdCopied] = useState(false);
+  const { notificationCount, pendingRequestCount } = useActivityIndicators(
+    isLoggedIn ? user?.id : null,
+  );
   const [currentSlide, setCurrentSlide] = useState(0);
+  const tutorialYoutubeEmbed = youtubeEmbedUrl(
+    process.env.NEXT_PUBLIC_TUTORIAL_YOUTUBE_URL,
+  );
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -123,11 +148,24 @@ function App() {
   async function handleLogout() {
     try {
       await api.delete("/api/logout");
-      await refreshUser();
+      logout();
     } catch (err) {
       console.error(err);
     }
   }
+
+  async function handleCopyAlidPayId() {
+    if (!user?.public_id) return;
+
+    try {
+      await navigator.clipboard.writeText(user.public_id);
+      setAlidPayIdCopied(true);
+      window.setTimeout(() => setAlidPayIdCopied(false), 1600);
+    } catch (err) {
+      console.error("Gagal menyalin ID AlidPay", err);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#F5EFE6] text-[#181715]">
       {/* QUICK CREATE TRANSACTION */}
@@ -148,19 +186,19 @@ function App() {
       )}
       {/* NAVBAR */}
       <header className="fixed inset-x-0 top-0 z-50">
-        <div className="mx-auto max-w-7xl px-5 pt-5 sm:px-8">
-          <nav className="flex items-center justify-between rounded-full border-2 border-[#E0DDD5]/80 bg-[#F5EFE6]/90 px-5 py-3 backdrop-blur-xl">
+        <div className="mx-auto max-w-7xl px-3 pt-3 sm:px-5 sm:pt-4 lg:px-8 lg:pt-5">
+          <nav className="flex min-h-16 items-center justify-between gap-3 rounded-[1.75rem] border border-[#D8D4CB]/90 bg-[#F5EFE6]/92 px-3.5 py-2.5 shadow-[0_12px_40px_rgba(24,23,21,0.04)] backdrop-blur-xl sm:min-h-[4.5rem] sm:rounded-full sm:px-5 lg:px-6">
             {/* Logo */}
             <a
               href="#hero"
-              className="group flex items-center gap-2.5 md:gap-3"
+              className="group flex min-w-0 items-center gap-2 sm:gap-2.5"
             >
-              <div className="relative h-10 w-10 shrink-0 md:h-14 md:w-14 lg:h-16 lg:w-16">
+              <div className="relative h-10 w-10 shrink-0 sm:h-12 sm:w-12 xl:h-14 xl:w-14">
                 <Image
                   src="/alidpay-logo.png"
                   alt="AlidPay Logo"
                   fill
-                  sizes="(min-width: 1024px) 64px, (min-width: 768px) 56px, 40px"
+                  sizes="(min-width: 1280px) 56px, (min-width: 640px) 48px, 40px"
                   priority
                   className="object-contain transition-transform duration-300 group-hover:-translate-y-0.5"
                   style={{
@@ -171,20 +209,20 @@ function App() {
               </div>
 
               <div
-                className={`${playfair.className} hidden items-baseline md:flex`}
+                className={`${playfair.className} hidden items-baseline sm:flex`}
               >
-                <span className="text-[25px] font-black leading-none tracking-[-0.065em] text-[#181715] lg:text-[30px]">
+                <span className="text-[23px] font-black leading-none tracking-[-0.065em] text-[#181715] xl:text-[28px]">
                   Alid
                 </span>
 
-                <span className="text-[25px] font-black leading-none tracking-[-0.065em] text-[#C85A28] lg:text-[30px]">
+                <span className="text-[23px] font-black leading-none tracking-[-0.065em] text-[#C85A28] xl:text-[28px]">
                   Pay
                 </span>
               </div>
             </a>
 
             {/* Desktop nav */}
-            <div className="hidden items-center gap-8 text-sm font-medium text-[#75726B] md:flex">
+            <div className="hidden items-center gap-6 text-sm font-medium text-[#75726B] xl:flex 2xl:gap-8">
               <a href="#cara-kerja" className="transition hover:text-[#181715]">
                 Cara kerja
               </a>
@@ -199,8 +237,14 @@ function App() {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-2">
-              {!isLoggedIn ? (
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+              {authLoading ? (
+                <div
+                  role="status"
+                  aria-label="Memeriksa sesi akun"
+                  className="h-10 w-24 animate-pulse rounded-full bg-[#E0DDD5] sm:w-32"
+                />
+              ) : !isLoggedIn ? (
                 <>
                   <Link
                     href="/login"
@@ -226,40 +270,48 @@ function App() {
                   <div className="hidden items-center gap-2 md:flex">
                     <Link
                       href="/create-transaction"
-                      className="group flex items-center gap-2 rounded-full border border-[#D8D4CB] bg-[#EFECE4] px-4 py-2.5 text-sm font-bold text-[#181715] transition hover:-translate-y-0.5 hover:bg-white"
+                      aria-label="Buat transaksi"
+                      className="group flex h-10 w-10 items-center justify-center gap-2 rounded-full border border-[#D8D4CB] bg-[#EFECE4] text-sm font-bold text-[#181715] transition hover:-translate-y-0.5 hover:bg-white xl:h-auto xl:w-auto xl:px-4 xl:py-2.5"
                     >
                       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#C85A28] text-white">
                         <Plus size={13} strokeWidth={2.5} />
                       </span>
-                      Buat transaksi
+                      <span className="hidden xl:inline">Buat transaksi</span>
                     </Link>
 
                     <Link
                       href="/transaction"
-                      className="group flex items-center gap-2 rounded-full border border-[#D8D4CB] bg-[#EFECE4] px-4 py-2.5 text-sm font-bold text-[#181715] transition hover:-translate-y-0.5 hover:bg-white"
+                      aria-label="Semua transaksi"
+                      className="group flex h-10 w-10 items-center justify-center gap-2 rounded-full border border-[#D8D4CB] bg-[#EFECE4] text-sm font-bold text-[#181715] transition hover:-translate-y-0.5 hover:bg-white xl:h-auto xl:w-auto xl:px-4 xl:py-2.5"
                     >
                       <WalletCards size={17} />
-                      Semua transaksi
+                      <span className="hidden xl:inline">Semua transaksi</span>
                     </Link>
 
                     <Link
                       href="/notifications"
+                      aria-label={`Notifikasi${notificationCount > 0 ? `, ${notificationCount} pembaruan belum dibaca` : ", tidak ada pembaruan baru"}`}
                       className="relative flex h-10 w-10 items-center justify-center rounded-full border border-[#D8D4CB] bg-[#F5EFE6] text-[#181715] transition hover:bg-white"
                     >
                       <Bell size={18} strokeWidth={1.8} />
 
-                      <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#C85A28]" />
+                      {notificationCount > 0 && (
+                        <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#C85A28] px-1 text-[10px] font-bold text-white">
+                          {notificationCount > 9 ? "9+" : notificationCount}
+                        </span>
+                      )}
                     </Link>
 
                     <Link
                       href="/requests"
+                      aria-label={`Inbox${pendingRequestCount > 0 ? `, ${pendingRequestCount} permintaan masuk` : ", tidak ada permintaan baru"}`}
                       className="relative flex h-10 w-10 items-center justify-center rounded-full border border-[#D8D4CB] bg-[#F5EFE6] text-[#181715] transition hover:bg-white"
                     >
                       <Inbox size={18} strokeWidth={1.8} />
 
-                      {pendingRequests > 0 && (
+                      {pendingRequestCount > 0 && (
                         <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#C85A28] px-1 text-[10px] font-bold text-white">
-                          {pendingRequests > 9 ? "9+" : pendingRequests}
+                          {pendingRequestCount > 9 ? "9+" : pendingRequestCount}
                         </span>
                       )}
                     </Link>
@@ -281,7 +333,7 @@ function App() {
                       <div className="absolute right-0 top-[calc(100%+10px)] z-[60] w-[min(340px,calc(100vw-40px))] overflow-hidden rounded-2xl border border-[#DCD8CF] bg-[#F5EFE6] shadow-2xl shadow-[#181715]/15">
                         {/* HEADER */}
                         <div className="flex items-center justify-between border-b border-[#E0DDD5] bg-[#EFECE4] px-5 py-4">
-                          <div>
+                          <div className="min-w-0">
                             <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#96928A]">
                               Akun AlidPay
                             </p>
@@ -289,6 +341,28 @@ function App() {
                             <p className="mt-1 text-sm font-bold tracking-[-0.02em] text-[#181715]">
                               {user?.name}
                             </p>
+
+                            {user?.public_id && (
+                              <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                                <p className="truncate font-mono text-[11px] font-semibold tracking-[0.02em] text-[#C85A28]">
+                                  ID: {user.public_id}
+                                </p>
+
+                                <button
+                                  type="button"
+                                  onClick={handleCopyAlidPayId}
+                                  aria-label={alidPayIdCopied ? "ID AlidPay tersalin" : "Salin ID AlidPay"}
+                                  title={alidPayIdCopied ? "Tersalin" : "Salin ID AlidPay"}
+                                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[#75726B] transition hover:bg-white hover:text-[#C85A28] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C85A28]/40"
+                                >
+                                  {alidPayIdCopied ? (
+                                    <Check size={13} strokeWidth={2.4} />
+                                  ) : (
+                                    <Copy size={13} strokeWidth={2} />
+                                  )}
+                                </button>
+                              </div>
+                            )}
                           </div>
 
                           <span className="rounded-full border border-[#D0CCC3] px-2 py-1 text-[9px] font-bold uppercase tracking-[0.08em] text-[#75726B]">
@@ -352,12 +426,18 @@ function App() {
                                 <Bell size={17} />
                               </div>
 
-                              <span className="h-2 w-2 rounded-full bg-[#C85A28]" />
+                              {notificationCount > 0 && (
+                                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#C85A28] px-1 text-[10px] font-bold text-white">
+                                  {notificationCount > 9 ? "9+" : notificationCount}
+                                </span>
+                              )}
                             </div>
 
                             <p className="mt-4 text-sm font-bold">Notifikasi</p>
                             <p className="mt-1 text-[11px] text-[#96928A]">
-                              Lihat pembaruan terbaru
+                              {notificationCount > 0
+                                ? `${notificationCount} pembaruan belum dibaca`
+                                : "Tidak ada pembaruan baru"}
                             </p>
                           </Link>
 
@@ -371,16 +451,18 @@ function App() {
                                 <Inbox size={17} />
                               </div>
 
-                              {pendingRequests > 0 && (
+                              {pendingRequestCount > 0 && (
                                 <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#C85A28] px-1 text-[10px] font-bold text-white">
-                                  {pendingRequests > 9 ? "9+" : pendingRequests}
+                                  {pendingRequestCount > 9 ? "9+" : pendingRequestCount}
                                 </span>
                               )}
                             </div>
 
                             <p className="mt-4 text-sm font-bold">Inbox</p>
                             <p className="mt-1 text-[11px] text-[#96928A]">
-                              Permintaan transaksi masuk dan keluar
+                              {pendingRequestCount > 0
+                                ? `${pendingRequestCount} permintaan perlu direspons`
+                                : "Tidak ada permintaan baru"}
                             </p>
                           </Link>
                         </div>
@@ -402,7 +484,7 @@ function App() {
                               </p>
 
                               <Link
-                                href="/account"
+                                href="/account/settings"
                                 onClick={() => setProfileOpen(false)}
                                 className="mt-2 inline-flex text-xs font-semibold text-[#C85A28]"
                               >
@@ -436,8 +518,9 @@ function App() {
                             />
                           </Link>
 
-                          <button
-                            type="button"
+                          <Link
+                            href="/account/switch"
+                            onClick={() => setProfileOpen(false)}
                             className="group flex w-full items-center gap-4 border-t border-[#E0DDD5] px-5 py-4 text-left text-sm font-medium text-[#181715] transition hover:bg-[#EFECE4]"
                           >
                             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#EFECE4] text-[#75726B]">
@@ -457,7 +540,7 @@ function App() {
                               size={16}
                               className="text-[#B2AEA6]"
                             />
-                          </button>
+                          </Link>
 
                           <button
                             type="button"
@@ -484,30 +567,37 @@ function App() {
         {/* HERO */}
         <section
           id="hero"
-          className="scroll-mt-32 relative overflow-hidden px-5 pb-24 pt-36 sm:px-8 sm:pt-44 lg:pb-32"
+          className="relative scroll-mt-28 overflow-hidden px-5 pb-16 pt-28 sm:px-8 sm:pb-20 sm:pt-36 lg:pb-24 lg:pt-40 xl:pb-28"
         >
-          <div className="relative mx-auto grid max-w-7xl items-center gap-16 lg:grid-cols-[1.05fr_0.95fr] lg:gap-12">
-            <div>
-              <h1 className="max-w-4xl text-[clamp(2.3rem,4.2vw,4.7rem)] font-bold leading-[0.96] tracking-[-0.055em]">
-                <span className="block">Mulai transaksi</span>
+          <div className="relative mx-auto grid max-w-7xl items-center gap-10 sm:gap-12 lg:grid-cols-[minmax(0,1.02fr)_minmax(360px,0.98fr)] lg:gap-10 xl:grid-cols-[1.05fr_0.95fr] xl:gap-14">
+            <div className="min-w-0">
+              <div className="flex max-w-4xl flex-col items-start gap-4 sm:gap-5">
+                {/* Security Pill Badge */}
+                <div className="inline-flex items-center gap-2 rounded-full border border-[#C85A28]/20 bg-[#C85A28]/10 px-3 py-1.5 text-[11px] font-semibold tracking-normal text-[#C85A28] sm:px-3.5 sm:text-sm">
+                  <span className="h-2 w-2 rounded-full bg-[#C85A28] motion-safe:animate-pulse" />
+                  Sepenuhnya Terlindungi
+                </div>
 
-                <span className="block whitespace-nowrap text-[#C85A28]">
-                  dengan rasa aman
-                </span>
+                {/* Main Headline */}
+                <h1 className="text-[clamp(2.25rem,7.5vw,3.5rem)] font-bold leading-[0.98] tracking-[-0.055em] text-[#181715] lg:text-[clamp(2.75rem,4.2vw,4.7rem)]">
+                  <span className="block">Mulai transaksi</span>
+                  <span className="block text-[#C85A28] sm:whitespace-nowrap">
+                    dengan aman,
+                  </span>
+                  <span className="block">dengan siapa saja</span>
+                </h1>
+              </div>
 
-                <span className="block">tanpa saling kenal</span>
-              </h1>
-
-              <p className="mt-8 max-w-xl text-base leading-7 text-[#75726B] sm:text-lg">
+              <p className="mt-6 max-w-xl text-sm leading-6 text-[#75726B] sm:mt-8 sm:text-base sm:leading-7 xl:text-lg">
                 AlidPay menjaga dana selama transaksi berlangsung. Pembeli dan
                 penjual tetap terlindungi dari awal hingga kesepakatan
                 terpenuhi.
               </p>
 
-              <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+              <div className="mt-7 grid gap-3 min-[420px]:grid-cols-2 sm:mt-9 sm:flex sm:flex-row">
                 <Link
                   href="/get-started"
-                  className="group flex items-center justify-center gap-3 rounded-full bg-[#C85A28] px-6 py-3.5 text-sm font-bold text-white transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-[#C85A28]/20"
+                  className="group flex min-h-12 items-center justify-center gap-3 rounded-full bg-[#C85A28] px-6 py-3.5 text-sm font-bold text-white transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-[#C85A28]/20"
                 >
                   Mulai transaksi
                   <ArrowRight
@@ -518,19 +608,19 @@ function App() {
 
                 <a
                   href="#cara-kerja"
-                  className="flex items-center justify-center gap-2 rounded-full border border-[#D8D4CB] px-6 py-3.5 text-sm font-bold transition hover:bg-[#EFECE4] lg:hidden"
+                  className="flex min-h-12 items-center justify-center gap-2 rounded-full border border-[#D8D4CB] bg-[#F5EFE6]/70 px-6 py-3.5 text-sm font-bold transition hover:bg-[#EFECE4]"
                 >
                   Lihat cara kerja
                   <ChevronRight size={16} />
                 </a>
               </div>
 
-              <div className="mt-12 flex items-center gap-5">
+              <div className="mt-9 flex flex-wrap items-center gap-x-5 gap-y-3 sm:mt-11">
                 <div className="flex -space-x-2">
-                  {["A", "R", "D", "F"].map((letter, index) => (
+                  {["A", "R", "D", "F"].map((letter) => (
                     <div
                       key={letter}
-                      className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#F5EFE6] bg-[#181715] text-xs font-bold text-white"
+                      className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#F5EFE6] bg-[#181715] text-[11px] font-bold text-white sm:h-9 sm:w-9 sm:text-xs"
                     >
                       {letter}
                     </div>
@@ -551,20 +641,33 @@ function App() {
             </div>
 
             {/* VIDEO SHOWCASE */}
-            <div className="relative -mx-5 w-[calc(100%+2.5rem)] sm:-mx-8 sm:w-[calc(100%+4rem)] lg:mx-auto lg:ml-auto lg:w-full lg:max-w-[600px]">
+            <div className="relative mx-auto w-full max-w-[720px] lg:ml-auto lg:max-w-[600px]">
               {/* Desktop decoration */}
               <div className="absolute -inset-5 hidden rotate-2 rounded-[32px] border border-[#DDD8CE] bg-[#EFECE4] lg:block" />
 
-              <div className="relative overflow-hidden lg:rounded-[28px] lg:border lg:border-[#D8D4CB] lg:bg-[#F5EFE6] lg:p-2.5 lg:shadow-[0_24px_70px_rgba(24,23,21,0.12)]">
-                <video
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  className="aspect-video w-full object-cover lg:rounded-[21px]"
-                >
-                  <source src="/videos/alisya-liu.mp4" type="video/mp4" />
-                </video>
+              <div className="relative overflow-hidden rounded-[22px] border border-[#D8D4CB] bg-[#F5EFE6] p-1.5 shadow-[0_18px_50px_rgba(24,23,21,0.10)] sm:rounded-[28px] sm:p-2.5 lg:shadow-[0_24px_70px_rgba(24,23,21,0.12)]">
+                {tutorialYoutubeEmbed ? (
+                  <iframe
+                    src={tutorialYoutubeEmbed}
+                    title="Video tutorial menggunakan AlidPay"
+                    loading="lazy"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    className="aspect-video w-full rounded-[17px] sm:rounded-[21px]"
+                  />
+                ) : (
+                  <video
+                    controls
+                    preload="metadata"
+                    playsInline
+                    poster="/videos/create-transaction.png"
+                    aria-label="Video tutorial menggunakan AlidPay"
+                    className="aspect-video w-full rounded-[17px] bg-black object-cover sm:rounded-[21px]"
+                  >
+                    <source src="/videos/alisya-liu.mp4" type="video/mp4" />
+                    Browser kamu tidak mendukung pemutar video.
+                  </video>
+                )}
               </div>
             </div>
           </div>
@@ -603,7 +706,7 @@ function App() {
             <div>
               <p className="max-w-3xl text-2xl font-medium leading-[1.35] tracking-[-0.03em] text-[#181715] sm:text-3xl">
                 AlidPay membantu pembeli dan penjual bertransaksi dengan lebih
-                terlindungi, bahkan ketika belum saling mengenal.
+                terlindungi, bahkan ketika kedua pihak belum saling mengenal atau sepenuhnya percaya.
               </p>
 
               <p className="mt-7 max-w-2xl leading-7 text-[#75726B]">
@@ -629,8 +732,6 @@ function App() {
                   Dibuat agar transaksi terasa lebih pasti.
                 </h2>
               </div>
-
-              <Sparkles className="hidden text-[#D49A2B] sm:block" size={32} />
             </div>
 
             <div className="grid gap-px overflow-hidden rounded-[2rem] border border-[#E0DDD5] bg-[#E0DDD5] md:grid-cols-3">
@@ -834,17 +935,17 @@ function App() {
           </div>
 
           <div className="flex flex-wrap gap-6 text-xs font-semibold text-[#75726B]">
-            <a href="#" className="hover:text-[#181715]">
+            <Link href="/privasi" className="hover:text-[#181715]">
               Privasi
-            </a>
+            </Link>
 
-            <a href="#" className="hover:text-[#181715]">
+            <Link href="/ketentuan" className="hover:text-[#181715]">
               Ketentuan
-            </a>
+            </Link>
 
-            <a href="#" className="hover:text-[#181715]">
+            <Link href="/bantuan" className="hover:text-[#181715]">
               Bantuan
-            </a>
+            </Link>
 
             <span>© 2026 AlidPay</span>
           </div>

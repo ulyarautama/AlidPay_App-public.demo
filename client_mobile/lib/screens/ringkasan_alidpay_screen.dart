@@ -230,7 +230,7 @@ class _RingkasanAlidpayScreenState extends State<RingkasanAlidpayScreen> {
         ? 'Pesanan akan diteruskan ke akun pembeli. Dana disimpan aman dan '
               'otomatis masuk ke saldomu setelah barang dikonfirmasi diterima.'
         : 'Dana kamu disimpan aman terlebih dahulu, baru diteruskan ke '
-              'penjual setelah kamu mengonfirmasi barang diterima dengan baik.';
+              'penjual setelah kamu mengonfirmasi pesanan diterima dengan baik.';
   }
 
   Future<void> _handleSubmit() async {

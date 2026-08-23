@@ -79,7 +79,7 @@ class _CreateDisputeScreenState extends State<CreateDisputeScreen> {
       'icon': Icons.people_outline_rounded,
     },
     {
-      'value': 'aktivitas_mencurigakan',
+      'value': 'indikasi_penipuan',
       'title': 'Aktivitas Mencurigakan',
       'subtitle': 'Indikasi penipuan atau aktivitas yang tidak wajar.',
       'icon': Icons.warning_amber_rounded,
@@ -161,7 +161,7 @@ class _CreateDisputeScreenState extends State<CreateDisputeScreen> {
           },
         ];
 
-      case 'aktivitas_mencurigakan':
+      case 'indikasi_penipuan':
         return [
           {
             'value': 'indikasi_penipuan',

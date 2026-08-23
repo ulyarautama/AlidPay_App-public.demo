@@ -36,19 +36,15 @@ export default function GetStartedPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const checkDevice = () => {
+    const frame = window.requestAnimationFrame(() => {
       const mobile =
         /Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent) ||
         window.innerWidth < 768;
 
       setDevice(mobile ? "mobile" : "desktop");
-    };
+    });
 
-    checkDevice();
-
-    window.addEventListener("resize", checkDevice);
-
-    return () => window.removeEventListener("resize", checkDevice);
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   return (
@@ -111,7 +107,6 @@ export default function GetStartedPage() {
         {/* HERO */}
         <div className="text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-[#DDD9D0] bg-[#EFECE4] px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] text-[#75726B]">
-            <Sparkles size={13} className="text-[#D49A2B]" />
             Mulai dengan AlidPay
           </div>
 
@@ -160,11 +155,6 @@ export default function GetStartedPage() {
         <div className="mx-auto mt-12 grid max-w-6xl gap-5 lg:grid-cols-[1.2fr_0.8fr]">
           {/* PRIMARY CARD */}
           <div className="relative min-h-[580px] overflow-hidden rounded-[2rem] bg-[#181715] p-7 text-white sm:p-10">
-            {/* DECORATIVE TEXT */}
-            <div className="pointer-events-none absolute -right-8 -top-16 select-none text-[190px] font-black leading-none tracking-[-0.12em] text-white/[0.035]">
-              A
-            </div>
-
             {device === "mobile" ? <MobileExperience /> : <WebExperience />}
           </div>
 
@@ -387,25 +377,30 @@ export default function GetStartedPage() {
 function MobileExperience() {
   return (
     <div className="relative flex h-full min-h-[520px] flex-col">
-      <div className="relative z-10 max-w-[55%]">
+      <div className="relative z-10 max-w-[58%] sm:max-w-[55%]">
         <p className="text-xs font-bold uppercase tracking-[0.15em] text-white/40">
           Aplikasi AlidPay
         </p>
 
-        <h2 className="mt-5 text-5xl font-bold leading-[0.94] tracking-[-0.07em] sm:text-6xl">
-          AlidPay
-          <br />
-          <span className="text-[#D49A2B]">dalam genggaman</span>
+        <h2 className="mt-4 text-[22px] font-bold leading-[0.94] tracking-[-0.055em] min-[375px]:text-[25px] sm:mt-5 sm:text-6xl sm:tracking-[-0.07em]">
+          <span className="block">AlidPay</span>
+          <span className="mt-1 block text-[#D49A2B] sm:hidden">dalam</span>
+          <span className="block whitespace-nowrap text-[#D49A2B] sm:hidden">
+            genggaman
+          </span>
+          <span className="hidden text-[#D49A2B] sm:block">
+            dalam genggaman
+          </span>
         </h2>
 
-        <p className="mt-6 max-w-sm text-sm leading-6 text-white/45">
+        <p className="mt-4 max-w-sm text-[11px] leading-5 text-white/45 sm:mt-6 sm:text-sm sm:leading-6">
           Pantau pendapatan, transaksi aktif, dan pesanan langsung melalui
           aplikasi AlidPay.
         </p>
       </div>
 
       {/* FLUTTER SELLER DASHBOARD MOCKUP */}
-      <div className="absolute -bottom-[155px] -right-3 hidden rotate-[-5deg] sm:block">
+      <div className="absolute -right-4 top-10 block origin-top-right scale-[0.5] rotate-[-5deg] sm:-bottom-[155px] sm:-right-3 sm:top-auto sm:scale-100">
         <div className="w-[270px] overflow-hidden rounded-[2.7rem] border-[7px] border-[#292824] bg-[#F5EFE6] shadow-2xl shadow-black/40">
           {/* PHONE TOP */}
           <div className="relative bg-[#F5EFE6] px-4 pb-5 pt-6 text-[#181715]">
@@ -526,7 +521,7 @@ function MobileExperience() {
       </div>
 
       {/* DOWNLOAD */}
-      <div className="relative z-10 mt-auto pt-12 sm:max-w-[50%]">
+      <div className="relative z-10 mt-auto max-w-[58%] pt-12 sm:max-w-[50%]">
         <div className="mb-4 flex items-center gap-2 text-xs text-white/40">
           <Download size={14} />
           Tersedia untuk Android & iOS
@@ -546,7 +541,7 @@ function WebExperience() {
     <div className="flex h-full min-h-[520px] flex-col">
       <div>
         <p className="text-xs font-bold uppercase tracking-[0.15em] text-white/40">
-          AlidPay Web
+          Website AlidPay
         </p>
 
         <h2 className="mt-5 max-w-xl text-5xl font-bold leading-[0.94] tracking-[-0.07em] sm:text-6xl">
@@ -580,11 +575,28 @@ function WebExperience() {
             <ArrowLeft size={11} />
 
             <div className="flex items-center gap-1.5">
-              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#181715] text-[7px] font-black text-[#F5EFE6]">
-                A
+              <div className="relative h-5 w-5 shrink-0">
+                <Image
+                  src="/alidpay-logo.png"
+                  alt="Logo AlidPay"
+                  fill
+                  sizes="20px"
+                  className="object-contain"
+                  style={{
+                    filter:
+                      "drop-shadow(0 1px 1px rgba(24,23,21,0.25)) drop-shadow(0 2px 3px rgba(24,23,21,0.12))",
+                  }}
+                />
               </div>
 
-              <span className="text-[8px] font-extrabold">AlidPay</span>
+              <div className={`${playfair.className} flex items-baseline`}>
+                <span className="text-[9px] font-black leading-none tracking-[-0.06em] text-[#181715]">
+                  Alid
+                </span>
+                <span className="text-[9px] font-black leading-none tracking-[-0.06em] text-[#C85A28]">
+                  Pay
+                </span>
+              </div>
             </div>
 
             <span />

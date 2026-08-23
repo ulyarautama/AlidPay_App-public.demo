@@ -150,9 +150,6 @@ export default function TransactionsPage() {
       setLoading(true);
 
       const res = await api.get("/api/transaction");
-
-      console.log("ALL TRANSACTIONS:", res.data);
-
       /*
        * Laravel paginate() biasanya mengembalikan:
        *
@@ -227,7 +224,7 @@ export default function TransactionsPage() {
         <div className="mx-auto flex h-[72px] max-w-5xl items-center px-5 sm:px-8">
           <button
             type="button"
-            onClick={() => window.history.back()}
+            onClick={() => router.replace("/")}
             className="group flex items-center gap-2 text-sm font-semibold transition hover:opacity-60"
           >
             <ArrowLeft

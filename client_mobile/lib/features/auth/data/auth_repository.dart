@@ -26,9 +26,7 @@ class AuthRepository {
     return await api.checkEmailProvider(email: email);
   }
 
-  Future<Map<String, dynamic>> checkName({
-    required String name,
-  }) async {
+  Future<Map<String, dynamic>> checkName({required String name}) async {
     return await api.checkName(name: name);
   }
 
@@ -58,26 +56,17 @@ class AuthRepository {
       debugPrint('Google Sign-In gagal: $errorText');
       debugPrintStack(stackTrace: stackTrace);
 
-      throw StateError(
-        'Google Sign-In gagal. Detail: $errorText',
-      );
+      throw StateError('Google Sign-In gagal. Detail: $errorText');
     }
   }
 
   /// 🔥 JEMBATAN EMAS: Mengirimkan email dan token dari Google ke class AuthApi
   Future<Map<String, dynamic>> loginGoogleToBackend({
-    required String id,
-    required String name,
-    required String email,
+    required String credential,
     required String role,
   }) async {
     // Dipanggil lewat objek 'authApi' yang sudah di-inject di constructor atas
-    return await api.loginGoogleToBackend(
-      id: id,
-      name: name,
-      email: email,
-      role: role,
-    );
+    return await api.loginGoogleToBackend(credential: credential, role: role);
   }
 
   Future register({

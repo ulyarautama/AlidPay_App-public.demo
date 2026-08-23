@@ -38,6 +38,13 @@ export type AlidPayTransaction = {
   seller?: TransactionUser | null;
   creator?: TransactionUser | null;
   required_role?: "pembeli" | "penjual";
+  dispute?: {
+    id: number;
+    status: string;
+    resolution: "refund_buyer" | "release_seller" | null;
+    resolution_notes: string | null;
+    resolved_at: string | null;
+  } | null;
 };
 
 export const transactionStatuses: Record<
@@ -81,7 +88,7 @@ export const transactionStatuses: Record<
     dot: "bg-emerald-500",
   },
   sengketa: {
-    label: "Dispute sedang ditinjau mediator",
+    label: "Dispute sedang ditinjau pihak AlidPay",
     short: "Sedang Ditinjau",
     tone: "bg-red-50 text-red-700 border-red-200",
     dot: "bg-red-500",
@@ -123,6 +130,8 @@ export function canOpenChat(status: TransactionStatus) {
     "dana_ditahan",
     "barang_dikirim",
     "dana_dicairkan",
+    "sengketa",
+    "dibatalkan",
   ].includes(status);
 }
 
@@ -145,7 +154,9 @@ export async function fetchTransactions(page = 1, perPage = 100) {
 export async function fetchTransaction(id: string) {
   const response = await api.get(`/api/transaction/${id}`);
 
-  return (response.data?.transaction ?? response.data?.data ?? response.data) as AlidPayTransaction;
+  return (response.data?.transaction ??
+    response.data?.data ??
+    response.data) as AlidPayTransaction;
 }
 
 export async function confirmTransaction(id: string) {
@@ -170,9 +181,13 @@ export async function confirmTransactionReceived(id: string) {
 
 export function apiErrorMessage(error: unknown, fallback: string) {
   if (typeof error === "object" && error !== null && "response" in error) {
-    const response = (error as {
-      response?: { data?: { message?: string; errors?: Record<string, string[]> } };
-    }).response;
+    const response = (
+      error as {
+        response?: {
+          data?: { message?: string; errors?: Record<string, string[]> };
+        };
+      }
+    ).response;
     const firstValidationError = response?.data?.errors
       ? Object.values(response.data.errors).flat()[0]
       : null;

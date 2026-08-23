@@ -33,6 +33,7 @@ type ChatSummary = {
   last_message_at: string | null;
   last_message_sender_id: string | null;
   last_message_sender_name: string | null;
+  last_message_type?: "user" | "transaction_status" | null;
   unread_count: number;
 };
 
@@ -87,12 +88,11 @@ const transactionCopy: Record<
   sengketa: {
     title: "Transaksi dalam sengketa",
     description: (item) =>
-      `Sengketa ${item.judul_barang} sedang ditinjau mediator.`,
+      `Sengketa ${item.judul_barang} sedang ditinjau pihak AlidPay.`,
   },
   dibatalkan: {
     title: "Transaksi dibatalkan",
-    description: (item) =>
-      `Transaksi ${item.judul_barang} tidak dilanjutkan.`,
+    description: (item) => `Transaksi ${item.judul_barang} tidak dilanjutkan.`,
   },
 };
 
@@ -112,10 +112,7 @@ function TransactionActivityIcon({ type }: { type: Activity["icon"] }) {
 
 function formatActivityTime(value: string) {
   const date = new Date(value);
-  const seconds = Math.max(
-    0,
-    Math.floor((Date.now() - date.getTime()) / 1000),
-  );
+  const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
 
   if (seconds < 60) return "Baru saja";
 
@@ -216,9 +213,12 @@ export default function NotificationsPage() {
         transactionId: transaction.id,
         kind: "chat",
         icon: "chat",
-        title: isOwnMessage
-          ? `Pesan terkirim di ${transaction.judul_barang}`
-          : `Pesan baru dari ${chat.last_message_sender_name ?? "lawan transaksi"}`,
+        title:
+          chat.last_message_type === "transaction_status"
+            ? `Pembaruan pesanan ${transaction.judul_barang}`
+            : isOwnMessage
+              ? `Pesan terkirim di ${transaction.judul_barang}`
+              : `Pesan baru dari ${chat.last_message_sender_name ?? "lawan transaksi"}`,
         description: chat.last_message,
         occurredAt: chat.last_message_at,
         unread: Number(chat.unread_count) > 0,
@@ -333,9 +333,9 @@ export default function NotificationsPage() {
       {/* BACK HEADER */}
       <header className="sticky top-0 z-40 border-b border-[#E0DDD5] bg-[#F5EFE6]/90 backdrop-blur-xl">
         <div className="mx-auto flex h-[72px] max-w-4xl items-center px-5 sm:px-8">
-          <button 
+          <button
             type="button"
-            onClick={() => router.back()}
+            onClick={() => router.replace("/")}
             className="group flex items-center gap-2 text-sm font-semibold transition hover:opacity-60"
             aria-label="Kembali ke halaman sebelumnya"
           >

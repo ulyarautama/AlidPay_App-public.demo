@@ -293,7 +293,22 @@ function RegisterContent() {
                       htmlFor="terms"
                       className="text-xs leading-5 text-[#75726B]"
                     >
-                      Saya menyetujui Terms of Service dan Privacy Policy
+                      Saya menyetujui{" "}
+                      <Link
+                        href="/ketentuan"
+                        target="_blank"
+                        className="font-semibold text-[#C85A28] hover:underline"
+                      >
+                        Ketentuan Layanan
+                      </Link>{" "}
+                      dan{" "}
+                      <Link
+                        href="/privasi"
+                        target="_blank"
+                        className="font-semibold text-[#C85A28] hover:underline"
+                      >
+                        Kebijakan Privasi
+                      </Link>{" "}
                       AlidPay.
                     </label>
                   </div>
