@@ -9,6 +9,10 @@ import {
   ReactNode,
 } from "react";
 import { api } from "../lib/axios";
+import {
+  clearAccountSelectionRequirement,
+  isAccountSelectionRequired,
+} from "../lib/accountSelection";
 import { usePathname, useRouter } from "next/navigation";
 
 interface User {
@@ -19,6 +23,7 @@ interface User {
   phone?: string | null;
   role: "pembeli" | "penjual";
   auth_provider?: "manual" | "google";
+  balance: number;
 }
 
 interface AuthContextType {
@@ -41,6 +46,8 @@ const protectedUserRoutes = [
 ];
 
 function isProtectedUserRoute(pathname: string) {
+  if (pathname === "/account/switch") return false;
+
   return protectedUserRoutes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
@@ -77,7 +84,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     loadCurrentUser()
       .then((authenticatedUser) => {
-        if (active) setUser(authenticatedUser);
+        if (active) {
+          if (authenticatedUser) clearAccountSelectionRequirement();
+          setUser(authenticatedUser);
+        }
       })
       .finally(() => {
         if (active) setSessionCheckedPath(pathname);
@@ -95,12 +105,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshUser]);
 
   useEffect(() => {
-    if (!loading && protectedRoute && !user) {
+    if (loading || user) return;
+
+    const authEntryRoute = pathname === "/login"
+      || pathname === "/register"
+      || pathname === "/verify-email";
+
+    if (
+      isAccountSelectionRequired()
+      && pathname !== "/account/switch"
+      && !authEntryRoute
+      && !pathname.startsWith("/admin")
+    ) {
+      router.replace("/account/switch?required=1");
+      return;
+    }
+
+    if (protectedRoute) {
       router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
     }
   }, [loading, pathname, protectedRoute, router, user]);
 
   function login(user: User) {
+    clearAccountSelectionRequirement();
     setUser(user);
   }
 

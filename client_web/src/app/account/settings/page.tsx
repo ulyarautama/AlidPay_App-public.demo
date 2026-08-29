@@ -9,6 +9,7 @@ import {
   Save,
   ShieldCheck,
   UserRound,
+  Wallet,
 } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -103,6 +104,25 @@ export default function AccountSettingsPage() {
                 </p>
               </div>
             )}
+            <div className="mt-6 border-t border-white/10 pt-5">
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/35">
+                Saldo AlidPay
+              </p>
+              <p className="mt-2 text-lg font-bold">
+                {new Intl.NumberFormat("id-ID", {
+                  style: "currency",
+                  currency: "IDR",
+                  maximumFractionDigits: 0,
+                }).format(Number(user.balance))}
+              </p>
+              <button
+                type="button"
+                onClick={() => router.push("/account/top-up?return=/account/settings")}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-white px-4 py-2.5 text-xs font-bold text-[#181715]"
+              >
+                <Wallet size={15} /> Top up saldo
+              </button>
+            </div>
           </aside>
 
           <form

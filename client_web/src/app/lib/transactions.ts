@@ -1,4 +1,6 @@
+import axios from "axios";
 import { api } from "./axios";
+import type { MidtransCheckout } from "../components/MidtransSnap";
 
 export type TransactionStatus =
   | "draft_link"
@@ -45,6 +47,26 @@ export type AlidPayTransaction = {
     resolution_notes: string | null;
     resolved_at: string | null;
   } | null;
+};
+
+export type TransactionReceipt = {
+  id: string;
+  receipt_number: string;
+  kind: "payment" | "settlement";
+  snapshot: {
+    transaction_id: string;
+    kind: "payment" | "settlement";
+    item: string;
+    amount: number;
+    fee: number;
+    seller_amount?: number;
+    currency: "IDR";
+    status: TransactionStatus;
+    buyer: { name: string | null; public_id: string | null };
+    seller: { name: string | null; public_id: string | null };
+    payment_method: "alidpay_balance" | "midtrans";
+  };
+  issued_at: string;
 };
 
 export const transactionStatuses: Record<
@@ -167,8 +189,70 @@ export async function rejectTransaction(id: string) {
   return api.post(`/api/transaction/${id}/tolak`);
 }
 
-export async function markTransactionPaid(id: string) {
-  return api.patch(`/api/transaction/${id}/mark-paid-simple`);
+export async function markTransactionPaid(id: string, idempotencyKey: string) {
+  const requestId = crypto.randomUUID();
+  const send = () =>
+    api.post(
+      `/api/transaction/${id}/payment`,
+      {},
+      {
+        timeout: 15_000,
+        headers: {
+          "Idempotency-Key": idempotencyKey,
+          "X-Request-ID": requestId,
+        },
+      },
+    );
+
+  try {
+    return await send();
+  } catch (error) {
+    const status = axios.isAxiosError(error)
+      ? (error.response?.status ?? null)
+      : null;
+    const retryable =
+      axios.isAxiosError(error) &&
+      (!error.response || status === 408 || (status !== null && status >= 500));
+
+    if (!retryable) throw error;
+
+    await new Promise((resolve) => window.setTimeout(resolve, 500));
+    return send();
+  }
+}
+
+export type GatewayPaymentMethod = "qris" | "bank" | "ewallet";
+
+export async function startMidtransTransactionPayment(
+  id: string,
+  paymentMethod: GatewayPaymentMethod,
+  idempotencyKey: string,
+) {
+  const response = await api.post(
+    `/api/transaction/${id}/payment/midtrans`,
+    { payment_method: paymentMethod },
+    {
+      timeout: 20_000,
+      headers: {
+        "Idempotency-Key": idempotencyKey,
+        "X-Request-ID": crypto.randomUUID(),
+      },
+    },
+  );
+
+  return response.data as MidtransCheckout & {
+    payment_attempt_id: string;
+    environment: "sandbox" | "production";
+  };
+}
+
+export async function fetchTransactionReceipts(id: string) {
+  const response = await api.get(`/api/transaction/${id}/receipt`);
+
+  return response.data as {
+    receipts: TransactionReceipt[];
+    latest_receipt: TransactionReceipt;
+  };
 }
 
 export async function markTransactionShipped(id: string) {

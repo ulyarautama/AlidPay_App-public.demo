@@ -1,9 +1,12 @@
+import 'dart:math';
+
 import 'package:client_mobile/core/network/dio_client.dart';
 import 'package:client_mobile/core/network/api_endpoints.dart';
 import 'package:client_mobile/models/transaction.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class TransactionService {
   static Future<Map<String, dynamic>> createTransaction({
@@ -160,6 +163,50 @@ class TransactionService {
       return Map<String, dynamic>.from(body);
     }
     return {};
+  }
+
+  static Future<Map<String, dynamic>> payWithBalance(String trxId) async {
+    final preferences = await SharedPreferences.getInstance();
+    final storageKey = 'alidpay.payment_key.$trxId';
+    final idempotencyKey =
+        preferences.getString(storageKey) ?? _secureIdempotencyKey();
+    await preferences.setString(storageKey, idempotencyKey);
+
+    final response = await DioClient.dio.post(
+      ApiEndpoints.confirmPayment(trxId),
+      data: const <String, dynamic>{},
+      options: Options(
+        headers: {
+          'Idempotency-Key': idempotencyKey,
+          'X-Request-ID': _secureUuidV4(),
+        },
+      ),
+    );
+
+    await preferences.remove(storageKey);
+    final body = response.data;
+    return body is Map ? Map<String, dynamic>.from(body) : <String, dynamic>{};
+  }
+
+  static String _secureIdempotencyKey() {
+    final random = Random.secure();
+    return List.generate(
+      32,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
+  }
+
+  static String _secureUuidV4() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    final hex = bytes
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+        '${hex.substring(12, 16)}-${hex.substring(16, 20)}-'
+        '${hex.substring(20)}';
   }
 
   static Future<void> confirmReceived(String id) async {

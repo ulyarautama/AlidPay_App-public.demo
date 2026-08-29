@@ -25,7 +25,7 @@ class ApiEndpoints {
       '/transaction/$transactionId/disputes';
 
   static String getDetailTransaction(String id) => '/transaction/$id';
-  static String confirmPayment(String id) => '/transaction/$id/confirm-payment';
+  static String confirmPayment(String id) => '/transaction/$id/payment';
   static String markShipped(String id) => '/transaction/$id/mark-shipped';
   static String confirmReceived(String id) =>
       '/transaction/$id/confirm-received';

@@ -16,12 +16,21 @@ import {
   Bell,
   Inbox,
   Copy,
+  Clock3,
+  PackageCheck,
+  RefreshCcw,
+  BookOpen,
 } from "lucide-react";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { useAuth } from "./context/AuthContext";
 import { api } from "./lib/axios";
+import {
+  clearAccountSelectionRequirement,
+  requireAccountSelection,
+} from "./lib/accountSelection";
 import { useActivityIndicators } from "./hooks/useActivityIndicators";
 import Image from "next/image";
 import { Playfair_Display } from "next/font/google";
@@ -105,6 +114,364 @@ const tutorialSlides = [
   },
 ];
 
+interface HomeTransaction {
+  id: string;
+  judul_barang: string;
+  nominal: number;
+  status: string;
+  updated_at: string;
+}
+
+const transactionStatusLabels: Record<string, string> = {
+  draft_link: "Draft tautan",
+  menunggu_konfirmasi: "Menunggu konfirmasi",
+  menunggu_pembayaran: "Menunggu pembayaran",
+  dana_ditahan: "Dana ditahan",
+  barang_dikirim: "Barang dikirim",
+  dana_dicairkan: "Selesai",
+  sengketa: "Sedang ditinjau",
+  dibatalkan: "Dibatalkan",
+};
+
+function formatRupiah(value: number) {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatTransactionTime(value: string) {
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function transactionStatusClass(status: string) {
+  if (status === "dana_dicairkan") return "bg-[#E7F7F0] text-[#087A55]";
+  if (status === "sengketa" || status === "dibatalkan") {
+    return "bg-[#FDECEC] text-[#C2413A]";
+  }
+
+  return "bg-[#FBEDE6] text-[#C85A28]";
+}
+
+function AuthenticatedDashboard({
+  userName,
+  userRole,
+  notificationCount,
+  pendingRequestCount,
+}: {
+  userName: string;
+  userRole: "pembeli" | "penjual";
+  notificationCount: number;
+  pendingRequestCount: number;
+}) {
+  const [transactions, setTransactions] = useState<HomeTransaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+
+  async function loadTransactions() {
+    try {
+      setLoading(true);
+      setLoadError(false);
+      const response = await api.get("/api/transaction", {
+        params: { per_page: 6 },
+      });
+      setTransactions(
+        Array.isArray(response.data?.data) ? response.data.data : [],
+      );
+    } catch (error) {
+      console.error("Gagal memuat ringkasan transaksi:", error);
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => void loadTransactions(), 0);
+    return () => window.clearTimeout(timeout);
+  }, []);
+
+  const activeTransactions = transactions.filter(
+    (transaction) =>
+      !["dana_dicairkan", "dibatalkan"].includes(transaction.status),
+  );
+  const completedTransactions = transactions.filter(
+    (transaction) => transaction.status === "dana_dicairkan",
+  );
+
+  const quickActions = [
+    {
+      href: "/create-transaction",
+      icon: Plus,
+      title: "Buat transaksi",
+      description:
+        userRole === "penjual"
+          ? "Mulai transaksi sebagai penjual"
+          : "Mulai transaksi sebagai pembeli",
+      accent: true,
+    },
+    {
+      href: "/transaction",
+      icon: WalletCards,
+      title: "Semua transaksi",
+      description: "Lihat dan lanjutkan seluruh transaksi",
+    },
+    {
+      href: "/requests",
+      icon: Inbox,
+      title: "Permintaan",
+      description:
+        pendingRequestCount > 0
+          ? `${pendingRequestCount} permintaan perlu ditinjau`
+          : "Tidak ada permintaan baru",
+      badge: pendingRequestCount,
+    },
+    {
+      href: "/notifications",
+      icon: Bell,
+      title: "Aktivitas",
+      description:
+        notificationCount > 0
+          ? `${notificationCount} pembaruan belum dibaca`
+          : "Semua aktivitas sudah dibaca",
+      badge: notificationCount,
+    },
+  ];
+
+  return (
+    <main className="px-4 pb-24 pt-28 sm:px-8 sm:pt-32 lg:pt-36">
+      <div className="mx-auto max-w-7xl">
+        <section className="grid gap-6 overflow-hidden rounded-[2rem] bg-[#181715] px-6 py-8 text-white sm:px-9 sm:py-10 lg:grid-cols-[1fr_auto] lg:items-end lg:px-12 lg:py-12">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#D49A2B]">
+              Beranda {userRole === "penjual" ? "Penjual" : "Pembeli"}
+            </p>
+            <h1 className="mt-4 max-w-3xl text-4xl font-bold leading-[0.98] tracking-[-0.06em] sm:text-5xl lg:text-6xl">
+              Halo, {userName.split(" ")[0]}.
+              <span className="block text-white/45">Mau transaksi apa hari ini?</span>
+            </h1>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
+            <Link
+              href="/?view=info"
+              className="group inline-flex min-h-12 items-center justify-center gap-2.5 rounded-full border border-white/20 bg-white/5 px-5 py-3.5 text-sm font-bold text-white transition hover:-translate-y-1 hover:bg-white/10"
+            >
+              <BookOpen size={17} />
+              Kenali AlidPay
+            </Link>
+            <Link
+              href="/create-transaction"
+              className="group inline-flex min-h-12 items-center justify-center gap-3 rounded-full bg-[#C85A28] px-6 py-3.5 text-sm font-bold text-white transition hover:-translate-y-1 hover:bg-[#d76732]"
+            >
+              <Plus size={18} />
+              Buat transaksi
+              <ArrowRight
+                size={17}
+                className="transition-transform group-hover:translate-x-1"
+              />
+            </Link>
+          </div>
+        </section>
+
+        <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {quickActions.map((action) => {
+            const Icon = action.icon;
+
+            return (
+              <Link
+                key={action.href}
+                href={action.href}
+                className={`group relative min-h-40 rounded-[1.5rem] border p-5 transition hover:-translate-y-1 hover:shadow-lg ${
+                  action.accent
+                    ? "border-[#C85A28] bg-[#C85A28] text-white"
+                    : "border-[#DCD8CF] bg-[#EFECE4] text-[#181715]"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <span
+                    className={`flex h-11 w-11 items-center justify-center rounded-2xl ${
+                      action.accent
+                        ? "bg-white/15"
+                        : "bg-[#181715] text-white"
+                    }`}
+                  >
+                    <Icon size={20} />
+                  </span>
+                  {!!action.badge && (
+                    <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-[#C85A28] px-2 text-xs font-bold text-white">
+                      {action.badge > 99 ? "99+" : action.badge}
+                    </span>
+                  )}
+                </div>
+                <h2 className="mt-7 text-lg font-bold tracking-[-0.03em]">
+                  {action.title}
+                </h2>
+                <p
+                  className={`mt-1 text-xs leading-5 ${
+                    action.accent ? "text-white/65" : "text-[#75726B]"
+                  }`}
+                >
+                  {action.description}
+                </p>
+              </Link>
+            );
+          })}
+        </section>
+
+        <section className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.5fr)]">
+          <div className="overflow-hidden rounded-[2rem] border border-[#DCD8CF] bg-[#EFECE4]">
+            <div className="flex items-center justify-between gap-4 border-b border-[#DCD8CF] px-5 py-5 sm:px-7">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#96928A]">
+                  Aktivitas terbaru
+                </p>
+                <h2 className="mt-1 text-2xl font-bold tracking-[-0.04em]">
+                  Transaksi kamu
+                </h2>
+              </div>
+              <Link
+                href="/transaction"
+                className="flex items-center gap-1.5 text-xs font-bold text-[#C85A28] hover:text-[#181715]"
+              >
+                Lihat semua <ChevronRight size={15} />
+              </Link>
+            </div>
+
+            <div className="divide-y divide-[#DCD8CF]">
+              {loading ? (
+                <div className="space-y-3 p-5 sm:p-7" role="status">
+                  {[0, 1, 2].map((item) => (
+                    <div
+                      key={item}
+                      className="h-20 animate-pulse rounded-2xl bg-[#E3DFD6]"
+                    />
+                  ))}
+                  <span className="sr-only">Memuat transaksi...</span>
+                </div>
+              ) : loadError ? (
+                <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
+                  <RefreshCcw size={28} className="text-[#C85A28]" />
+                  <p className="mt-4 font-bold">Ringkasan belum dapat dimuat</p>
+                  <button
+                    type="button"
+                    onClick={() => void loadTransactions()}
+                    className="mt-4 rounded-full border border-[#D8D4CB] px-4 py-2 text-xs font-bold hover:bg-[#F5EFE6]"
+                  >
+                    Coba lagi
+                  </button>
+                </div>
+              ) : transactions.length === 0 ? (
+                <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
+                  <WalletCards size={30} className="text-[#C85A28]" />
+                  <p className="mt-4 font-bold">Belum ada transaksi</p>
+                  <p className="mt-1 max-w-sm text-sm leading-6 text-[#75726B]">
+                    Mulai transaksi pertama kamu sebagai {userRole}.
+                  </p>
+                  <Link
+                    href="/create-transaction"
+                    className="mt-5 rounded-full bg-[#181715] px-5 py-2.5 text-xs font-bold text-white"
+                  >
+                    Buat transaksi
+                  </Link>
+                </div>
+              ) : (
+                transactions.slice(0, 4).map((transaction) => (
+                  <Link
+                    key={transaction.id}
+                    href={`/transaction/${transaction.id}`}
+                    className="grid gap-3 px-5 py-5 transition hover:bg-[#F5EFE6] sm:grid-cols-[1fr_auto] sm:items-center sm:px-7"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate font-bold">
+                          {transaction.judul_barang}
+                        </p>
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.06em] ${transactionStatusClass(transaction.status)}`}
+                        >
+                          {transactionStatusLabels[transaction.status] ??
+                            transaction.status}
+                        </span>
+                      </div>
+                      <p className="mt-1 flex items-center gap-1.5 text-xs text-[#96928A]">
+                        <Clock3 size={13} />
+                        Diperbarui {formatTransactionTime(transaction.updated_at)}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between gap-4 sm:justify-end">
+                      <p className="font-bold">
+                        {formatRupiah(Number(transaction.nominal))}
+                      </p>
+                      <ChevronRight size={17} className="text-[#B2AEA6]" />
+                    </div>
+                  </Link>
+                ))
+              )}
+            </div>
+          </div>
+
+          <aside className="grid content-start gap-4">
+            <div className="rounded-[2rem] border border-[#DCD8CF] bg-[#F5EFE6] p-6">
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#96928A]">
+                Ringkasan
+              </p>
+              <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-1">
+                <div className="rounded-2xl bg-[#EFECE4] p-4">
+                  <div className="flex items-center gap-2 text-[#C85A28]">
+                    <WalletCards size={17} />
+                    <span className="text-xs font-bold">Aktif</span>
+                  </div>
+                  <p className="mt-3 text-3xl font-bold tracking-[-0.05em]">
+                    {loading ? "—" : activeTransactions.length}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-[#EFECE4] p-4">
+                  <div className="flex items-center gap-2 text-[#087A55]">
+                    <PackageCheck size={17} />
+                    <span className="text-xs font-bold">Selesai</span>
+                  </div>
+                  <p className="mt-3 text-3xl font-bold tracking-[-0.05em]">
+                    {loading ? "—" : completedTransactions.length}
+                  </p>
+                </div>
+              </div>
+              <p className="mt-4 text-[11px] leading-5 text-[#96928A]">
+                Ringkasan mengikuti transaksi terbaru yang dimuat dari akunmu.
+              </p>
+            </div>
+
+            <Link
+              href="/bantuan"
+              className="group rounded-[2rem] bg-[#D49A2B] p-6 text-[#181715] transition hover:-translate-y-1"
+            >
+              <ShieldCheck size={22} />
+              <h2 className="mt-8 text-xl font-bold tracking-[-0.04em]">
+                Butuh bantuan transaksi?
+              </h2>
+              <p className="mt-2 text-xs leading-5 text-[#181715]/65">
+                Buka pusat bantuan untuk memahami alur atau penyelesaian masalah.
+              </p>
+              <span className="mt-5 flex items-center gap-1 text-xs font-bold">
+                Pusat bantuan
+                <ArrowRight
+                  size={14}
+                  className="transition-transform group-hover:translate-x-1"
+                />
+              </span>
+            </Link>
+          </aside>
+        </section>
+      </div>
+    </main>
+  );
+}
+
 function youtubeEmbedUrl(value?: string) {
   if (!value) return null;
 
@@ -123,7 +490,9 @@ function youtubeEmbedUrl(value?: string) {
   }
 }
 
-function App() {
+function HomeContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { isLoggedIn, user, logout, loading: authLoading } = useAuth();
   const [profileOpen, setProfileOpen] = useState(false);
   const [alidPayIdCopied, setAlidPayIdCopied] = useState(false);
@@ -134,6 +503,8 @@ function App() {
   const tutorialYoutubeEmbed = youtubeEmbedUrl(
     process.env.NEXT_PUBLIC_TUTORIAL_YOUTUBE_URL,
   );
+  const showAuthenticatedInfo =
+    isLoggedIn && searchParams.get("view") === "info";
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -147,8 +518,24 @@ function App() {
 
   async function handleLogout() {
     try {
-      await api.delete("/api/logout");
+      const response = await api.delete("/api/logout");
       logout();
+      const rememberedAccountsCount = Number(
+        response.data?.remembered_accounts_count ?? 0,
+      );
+
+      if (rememberedAccountsCount > 0) {
+        requireAccountSelection();
+      } else {
+        clearAccountSelectionRequirement();
+      }
+
+      router.replace(
+        rememberedAccountsCount > 0
+          ? "/account/switch?required=1"
+          : "/login",
+      );
+      router.refresh();
     } catch (err) {
       console.error(err);
     }
@@ -166,31 +553,35 @@ function App() {
     }
   }
 
+  if (authLoading) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex min-h-screen items-center justify-center bg-[#F5EFE6] text-[#181715]"
+      >
+        <div className="text-center">
+          <p className={`${playfair.className} text-4xl font-black tracking-[-0.065em]`}>
+            Alid<span className="text-[#C85A28]">Pay</span>
+          </p>
+          <div className="mx-auto mt-4 h-1 w-24 overflow-hidden rounded-full bg-[#E0DDD5]">
+            <div className="h-full w-1/2 animate-pulse rounded-full bg-[#C85A28]" />
+          </div>
+          <span className="sr-only">Memeriksa sesi akun...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F5EFE6] text-[#181715]">
-      {/* QUICK CREATE TRANSACTION */}
-      {isLoggedIn && (
-        <Link
-          href="/create-transaction"
-          className="group fixed bottom-7 right-7 z-50 hidden items-center gap-2.5 rounded-full bg-[#181715] px-5 py-3.5 text-sm font-bold text-white shadow-xl shadow-[#181715]/15 transition duration-300 hover:-translate-y-1 hover:bg-[#2a2926] lg:flex"
-        >
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#C85A28] text-white">
-            <Plus
-              size={16}
-              strokeWidth={2.5}
-              className="transition-transform duration-300 group-hover:rotate-90"
-            />
-          </span>
-          Buat Transaksi
-        </Link>
-      )}
       {/* NAVBAR */}
       <header className="fixed inset-x-0 top-0 z-50">
         <div className="mx-auto max-w-7xl px-3 pt-3 sm:px-5 sm:pt-4 lg:px-8 lg:pt-5">
           <nav className="flex min-h-16 items-center justify-between gap-3 rounded-[1.75rem] border border-[#D8D4CB]/90 bg-[#F5EFE6]/92 px-3.5 py-2.5 shadow-[0_12px_40px_rgba(24,23,21,0.04)] backdrop-blur-xl sm:min-h-[4.5rem] sm:rounded-full sm:px-5 lg:px-6">
             {/* Logo */}
             <a
-              href="#hero"
+              href={showAuthenticatedInfo ? "/?view=info" : isLoggedIn ? "/" : "#hero"}
               className="group flex min-w-0 items-center gap-2 sm:gap-2.5"
             >
               <div className="relative h-10 w-10 shrink-0 sm:h-12 sm:w-12 xl:h-14 xl:w-14">
@@ -222,19 +613,21 @@ function App() {
             </a>
 
             {/* Desktop nav */}
-            <div className="hidden items-center gap-6 text-sm font-medium text-[#75726B] xl:flex 2xl:gap-8">
-              <a href="#cara-kerja" className="transition hover:text-[#181715]">
-                Cara kerja
-              </a>
+            {!isLoggedIn && (
+              <div className="hidden items-center gap-6 text-sm font-medium text-[#75726B] xl:flex 2xl:gap-8">
+                <a href="#cara-kerja" className="transition hover:text-[#181715]">
+                  Cara kerja
+                </a>
 
-              <a href="#keamanan" className="transition hover:text-[#181715]">
-                Keamanan
-              </a>
+                <a href="#keamanan" className="transition hover:text-[#181715]">
+                  Keamanan
+                </a>
 
-              <a href="#tentang" className="transition hover:text-[#181715]">
-                Tentang
-              </a>
-            </div>
+                <a href="#tentang" className="transition hover:text-[#181715]">
+                  Tentang
+                </a>
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
@@ -266,57 +659,6 @@ function App() {
                 </>
               ) : (
                 <>
-                  {/* DESKTOP ACTIONS */}
-                  <div className="hidden items-center gap-2 md:flex">
-                    <Link
-                      href="/create-transaction"
-                      aria-label="Buat transaksi"
-                      className="group flex h-10 w-10 items-center justify-center gap-2 rounded-full border border-[#D8D4CB] bg-[#EFECE4] text-sm font-bold text-[#181715] transition hover:-translate-y-0.5 hover:bg-white xl:h-auto xl:w-auto xl:px-4 xl:py-2.5"
-                    >
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#C85A28] text-white">
-                        <Plus size={13} strokeWidth={2.5} />
-                      </span>
-                      <span className="hidden xl:inline">Buat transaksi</span>
-                    </Link>
-
-                    <Link
-                      href="/transaction"
-                      aria-label="Semua transaksi"
-                      className="group flex h-10 w-10 items-center justify-center gap-2 rounded-full border border-[#D8D4CB] bg-[#EFECE4] text-sm font-bold text-[#181715] transition hover:-translate-y-0.5 hover:bg-white xl:h-auto xl:w-auto xl:px-4 xl:py-2.5"
-                    >
-                      <WalletCards size={17} />
-                      <span className="hidden xl:inline">Semua transaksi</span>
-                    </Link>
-
-                    <Link
-                      href="/notifications"
-                      aria-label={`Notifikasi${notificationCount > 0 ? `, ${notificationCount} pembaruan belum dibaca` : ", tidak ada pembaruan baru"}`}
-                      className="relative flex h-10 w-10 items-center justify-center rounded-full border border-[#D8D4CB] bg-[#F5EFE6] text-[#181715] transition hover:bg-white"
-                    >
-                      <Bell size={18} strokeWidth={1.8} />
-
-                      {notificationCount > 0 && (
-                        <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#C85A28] px-1 text-[10px] font-bold text-white">
-                          {notificationCount > 9 ? "9+" : notificationCount}
-                        </span>
-                      )}
-                    </Link>
-
-                    <Link
-                      href="/requests"
-                      aria-label={`Inbox${pendingRequestCount > 0 ? `, ${pendingRequestCount} permintaan masuk` : ", tidak ada permintaan baru"}`}
-                      className="relative flex h-10 w-10 items-center justify-center rounded-full border border-[#D8D4CB] bg-[#F5EFE6] text-[#181715] transition hover:bg-white"
-                    >
-                      <Inbox size={18} strokeWidth={1.8} />
-
-                      {pendingRequestCount > 0 && (
-                        <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#C85A28] px-1 text-[10px] font-bold text-white">
-                          {pendingRequestCount > 9 ? "9+" : pendingRequestCount}
-                        </span>
-                      )}
-                    </Link>
-                  </div>
-
                   {/* PROFILE */}
                   <div className="relative">
                     <button
@@ -563,6 +905,15 @@ function App() {
         </div>
       </header>
 
+      {isLoggedIn && user && !showAuthenticatedInfo ? (
+        <AuthenticatedDashboard
+          userName={user.name}
+          userRole={user.role}
+          notificationCount={notificationCount}
+          pendingRequestCount={pendingRequestCount}
+        />
+      ) : (
+        <>
       <main>
         {/* HERO */}
         <section
@@ -572,6 +923,19 @@ function App() {
           <div className="relative mx-auto grid max-w-7xl items-center gap-10 sm:gap-12 lg:grid-cols-[minmax(0,1.02fr)_minmax(360px,0.98fr)] lg:gap-10 xl:grid-cols-[1.05fr_0.95fr] xl:gap-14">
             <div className="min-w-0">
               <div className="flex max-w-4xl flex-col items-start gap-4 sm:gap-5">
+                {showAuthenticatedInfo && (
+                  <Link
+                    href="/"
+                    className="group inline-flex items-center gap-2 rounded-full border border-[#181715]/10 bg-[#EFECE4] px-3.5 py-2 text-xs font-bold text-[#181715] transition hover:-translate-y-0.5 hover:bg-white"
+                  >
+                    <ArrowRight
+                      size={14}
+                      className="rotate-180 transition-transform group-hover:-translate-x-1"
+                    />
+                    Kembali ke ruang transaksi
+                  </Link>
+                )}
+
                 {/* Security Pill Badge */}
                 <div className="inline-flex items-center gap-2 rounded-full border border-[#C85A28]/20 bg-[#C85A28]/10 px-3 py-1.5 text-[11px] font-semibold tracking-normal text-[#C85A28] sm:px-3.5 sm:text-sm">
                   <span className="h-2 w-2 rounded-full bg-[#C85A28] motion-safe:animate-pulse" />
@@ -596,10 +960,12 @@ function App() {
 
               <div className="mt-7 grid gap-3 min-[420px]:grid-cols-2 sm:mt-9 sm:flex sm:flex-row">
                 <Link
-                  href="/get-started"
+                  href={showAuthenticatedInfo ? "/" : "/get-started"}
                   className="group flex min-h-12 items-center justify-center gap-3 rounded-full bg-[#C85A28] px-6 py-3.5 text-sm font-bold text-white transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-[#C85A28]/20"
                 >
-                  Mulai transaksi
+                  {showAuthenticatedInfo
+                    ? "Buka ruang transaksi"
+                    : "Mulai transaksi"}
                   <ArrowRight
                     size={17}
                     className="transition-transform group-hover:translate-x-1"
@@ -615,26 +981,15 @@ function App() {
                 </a>
               </div>
 
-              <div className="mt-9 flex flex-wrap items-center gap-x-5 gap-y-3 sm:mt-11">
-                <div className="flex -space-x-2">
-                  {["A", "R", "D", "F"].map((letter) => (
-                    <div
-                      key={letter}
-                      className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#F5EFE6] bg-[#181715] text-[11px] font-bold text-white sm:h-9 sm:w-9 sm:text-xs"
-                    >
-                      {letter}
-                    </div>
-                  ))}
-                </div>
+              <div className="mt-9 flex items-center gap-3 sm:mt-11">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#181715] text-white">
+                  <ShieldCheck size={18} />
+                </span>
 
                 <div>
-                  <div className="flex items-center gap-1 text-sm">
-                    <span className="font-bold">10.000+</span>
-                    <span className="text-[#75726B]">transaksi</span>
-                  </div>
-
+                  <p className="text-sm font-bold">Alur transaksi transparan</p>
                   <p className="text-xs text-[#96928A]">
-                    terlindungi dengan AlidPay
+                    Status dapat dipantau oleh kedua pihak
                   </p>
                 </div>
               </div>
@@ -880,10 +1235,12 @@ function App() {
                 </p>
 
                 <Link
-                  href="/get-started"
+                  href={showAuthenticatedInfo ? "/" : "/get-started"}
                   className="group mt-9 inline-flex items-center gap-3 rounded-full bg-white px-6 py-3.5 text-sm font-bold text-[#181715] transition hover:-translate-y-1 hover:shadow-xl"
                 >
-                  Mulai Transaksi
+                  {showAuthenticatedInfo
+                    ? "Kembali ke AlidPay saya"
+                    : "Mulai Transaksi"}
                   <ArrowRight
                     size={17}
                     className="transition-transform group-hover:translate-x-1"
@@ -951,7 +1308,37 @@ function App() {
           </div>
         </div>
       </footer>
+        </>
+      )}
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Suspense
+      fallback={
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex min-h-screen items-center justify-center bg-[#F5EFE6] text-[#181715]"
+        >
+          <div className="text-center">
+            <p
+              className={`${playfair.className} text-4xl font-black tracking-[-0.065em]`}
+            >
+              Alid<span className="text-[#C85A28]">Pay</span>
+            </p>
+            <div className="mx-auto mt-4 h-1 w-24 overflow-hidden rounded-full bg-[#E0DDD5]">
+              <div className="h-full w-1/2 animate-pulse rounded-full bg-[#C85A28]" />
+            </div>
+            <span className="sr-only">Menyiapkan halaman AlidPay...</span>
+          </div>
+        </div>
+      }
+    >
+      <HomeContent />
+    </Suspense>
   );
 }
 

@@ -112,6 +112,10 @@ class _DetailScreenState extends State<DetailScreen> {
     required String successMessage,
     bool popOnSuccess = true,
   }) async {
+    // setState is rendered on the next frame, so the existing button callback
+    // can still receive another rapid tap. Guard the request synchronously.
+    if (_isLoading) return;
+
     setState(() => _isLoading = true);
     try {
       await action();
@@ -516,7 +520,9 @@ class _DetailScreenState extends State<DetailScreen> {
                           final result = await Navigator.push<bool>(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => CreateDisputeScreen(trx: trx, userRole: widget.userRole ?? '',
+                              builder: (_) => CreateDisputeScreen(
+                                trx: trx,
+                                userRole: widget.userRole ?? '',
                               ),
                             ),
                           );
@@ -538,12 +544,11 @@ class _DetailScreenState extends State<DetailScreen> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                )
+                ),
               ),
             ],
 
-            // 3. BAYAR SEKARANG (Hanya Hak Pembeli) — VERSI SIMPLE
-            // (belum pakai payment gateway, tinggal update status transaksi)
+            // 3. BAYAR SEKARANG (Hanya Hak Pembeli)
             if (trx.status == AlidpayStatus.menungguPembayaran && isPembeli)
               SizedBox(
                 width: double.infinity,
@@ -551,7 +556,7 @@ class _DetailScreenState extends State<DetailScreen> {
                   onPressed: _isLoading
                       ? null
                       : () => _runAction(
-                          () => TransactionService.markAsPaidSimple(trx.id),
+                          () => TransactionService.payWithBalance(trx.id),
                           successMessage: 'Pembayaran berhasil dikonfirmasi.',
                         ),
                   icon: _isLoading
@@ -565,9 +570,9 @@ class _DetailScreenState extends State<DetailScreen> {
             // ============================================================
             // 🔒 MIDTRANS PAYMENT GATEWAY — DISIMPAN, JANGAN DIHAPUS.
             // Kalau mau pasang payment gateway lagi nanti:
-            // 1. Hapus/comment blok "VERSI SIMPLE" di atas.
+            // 1. Ganti alur saldo AlidPay di atas dengan redirect gateway.
             // 2. Uncomment fungsi _bayarViaMidtrans() di bagian bawah file ini.
-            // 3. Ganti pemanggilan TransactionService.markAsPaidSimple(trx.id)
+            // 3. Ganti pemanggilan TransactionService.payWithBalance(trx.id)
             //    di atas jadi _bayarViaMidtrans().
             // ============================================================
 

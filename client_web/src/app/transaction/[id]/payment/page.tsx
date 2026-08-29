@@ -7,15 +7,23 @@ import {
   CreditCard,
   Landmark,
   Loader2,
-  ShieldCheck,
   Smartphone,
   User,
   Wallet,
 } from "lucide-react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  MidtransSnap,
+  type MidtransCheckout,
+} from "../../../components/MidtransSnap";
 import { api } from "../../../lib/axios";
-import { apiErrorMessage } from "../../../lib/transactions";
+import {
+  apiErrorMessage,
+  markTransactionPaid,
+  startMidtransTransactionPayment,
+} from "../../../lib/transactions";
 import { redirectProtectedResourceError } from "../../../lib/protected-navigation";
 import { useAuth } from "../../../context/AuthContext";
 
@@ -45,7 +53,7 @@ interface Transaction {
   seller?: TransactionUser | null;
 }
 
-type PaymentMethod = "qris" | "bank" | "ewallet";
+type PaymentMethod = "alidpay_balance" | "qris" | "bank" | "ewallet";
 
 export default function PaymentPage() {
   const params = useParams();
@@ -59,7 +67,11 @@ export default function PaymentPage() {
   const [redirecting, setRedirecting] = useState(false);
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("qris");
+  const [notice, setNotice] = useState("");
+  const [paymentMethod, setPaymentMethod] =
+    useState<PaymentMethod>("alidpay_balance");
+  const [snapCheckout, setSnapCheckout] = useState<MidtransCheckout | null>(null);
+  const paymentRequestInFlight = useRef(false);
 
   function formatRupiah(value: number) {
     return new Intl.NumberFormat("id-ID", {
@@ -109,21 +121,40 @@ export default function PaymentPage() {
     }
   }, [authLoading, getTransaction, router, transactionId, user]);
 
-  async function handleSimulationPayment() {
-    if (!transaction) return;
+  async function handlePayment() {
+    if (!transaction || paymentRequestInFlight.current) return;
+
+    // State updates are rendered asynchronously. This ref closes the small
+    // window where rapid taps could otherwise start more than one request.
+    paymentRequestInFlight.current = true;
+    setPaying(true);
+    setError("");
+    setNotice("");
 
     try {
-      setPaying(true);
-      setError("");
+      const storageKey = `alidpay:payment-key:${transaction.id}:${paymentMethod}`;
+      const idempotencyKey =
+        window.sessionStorage.getItem(storageKey) ?? crypto.randomUUID();
+      window.sessionStorage.setItem(storageKey, idempotencyKey);
 
-      await api.patch(`/api/transaction/${transaction.id}/mark-paid-simple`);
+      if (paymentMethod === "alidpay_balance") {
+        await markTransactionPaid(transaction.id, idempotencyKey);
+        window.sessionStorage.removeItem(storageKey);
+        router.replace(`/transaction/${transaction.id}/receipt`);
+        return;
+      }
 
-      router.replace(`/transaction/${transaction.id}`);
+      const checkout = await startMidtransTransactionPayment(
+        transaction.id,
+        paymentMethod,
+        idempotencyKey,
+      );
+      setSnapCheckout(checkout);
     } catch (err: unknown) {
       console.error("Gagal melakukan pembayaran:", err);
 
       setError(apiErrorMessage(err, "Pembayaran gagal diproses."));
-    } finally {
+      paymentRequestInFlight.current = false;
       setPaying(false);
     }
   }
@@ -174,6 +205,10 @@ export default function PaymentPage() {
   }
 
   const total = Number(transaction.nominal);
+  const currentBalance = Number(user.balance);
+  const remainingBalance = currentBalance - total;
+  const isBalancePayment = paymentMethod === "alidpay_balance";
+  const hasInsufficientBalance = isBalancePayment && currentBalance < total;
 
   const isPaymentReady = transaction.status === "menunggu_pembayaran";
 
@@ -220,6 +255,30 @@ export default function PaymentPage() {
   return (
     <main className="min-h-screen bg-[#F5EFE6] px-5 pb-20 pt-28 sm:px-8">
       <div className="mx-auto max-w-4xl">
+        <MidtransSnap
+          checkout={snapCheckout}
+          onSuccess={() => {
+            setPaying(false);
+            setNotice("Pembayaran diterima Midtrans dan sedang diverifikasi oleh AlidPay.");
+            router.replace(`/transaction/${transaction.id}`);
+          }}
+          onPending={() => {
+            paymentRequestInFlight.current = false;
+            setPaying(false);
+            setNotice("Instruksi pembayaran sudah dibuat. Selesaikan sebelum kedaluwarsa.");
+          }}
+          onError={() => {
+            paymentRequestInFlight.current = false;
+            setPaying(false);
+            setError("Pembayaran Midtrans gagal. Kamu dapat mencoba kembali.");
+          }}
+          onClose={() => {
+            paymentRequestInFlight.current = false;
+            setPaying(false);
+            setNotice("Jendela pembayaran ditutup. Pembayaran belum dinyatakan lunas.");
+          }}
+        />
+
         {/* BACK */}
         <button
           type="button"
@@ -256,11 +315,11 @@ export default function PaymentPage() {
             </div>
 
             <div>
-              <p className="text-sm font-bold">Mode pengembangan</p>
+              <p className="text-sm font-bold">Midtrans Sandbox</p>
 
               <p className="mt-1 text-xs leading-5 text-[#75726B]">
-                Payment gateway resmi belum terhubung. Tombol pembayaran di
-                bawah hanya digunakan untuk simulasi alur transaksi AlidPay.
+                QRIS, transfer bank, dan e-wallet memakai uang uji Midtrans.
+                Saldo AlidPay tetap diproses oleh ledger internal AlidPay.
               </p>
             </div>
           </div>
@@ -346,33 +405,68 @@ export default function PaymentPage() {
           </div>
 
           <div className="mt-6 space-y-3">
-            {/* QRIS */}
+            <PaymentOption
+              active={paymentMethod === "alidpay_balance"}
+              onClick={() => setPaymentMethod("alidpay_balance")}
+              icon={<Wallet size={20} />}
+              title="Saldo AlidPay"
+              description={`Saldo tersedia ${formatRupiah(currentBalance)}`}
+            />
+
             <PaymentOption
               active={paymentMethod === "qris"}
               onClick={() => setPaymentMethod("qris")}
               icon={<Smartphone size={20} />}
               title="QRIS"
               description="Scan menggunakan aplikasi pembayaran"
+              badge="Sandbox"
             />
 
-            {/* BANK */}
             <PaymentOption
               active={paymentMethod === "bank"}
               onClick={() => setPaymentMethod("bank")}
               icon={<Landmark size={20} />}
               title="Transfer Bank"
               description="Virtual account / transfer bank"
+              badge="Sandbox"
             />
 
-            {/* EWALLET */}
             <PaymentOption
               active={paymentMethod === "ewallet"}
               onClick={() => setPaymentMethod("ewallet")}
               icon={<Wallet size={20} />}
               title="E-Wallet"
-              description="GoPay, DANA, OVO, dan lainnya"
+              description="GoPay, DANA, OVO, dan ShopeePay"
+              badge="Sandbox"
             />
           </div>
+
+          {isBalancePayment && (
+            <div className="mt-4 flex items-center justify-between gap-4 border-t border-[#DCD8CF] pt-4 text-sm">
+              <span className="text-[#75726B]">Sisa setelah pembayaran</span>
+              <span
+                className={`font-bold ${
+                  hasInsufficientBalance ? "text-red-600" : "text-[#181715]"
+                }`}
+              >
+                {formatRupiah(Math.max(remainingBalance, 0))}
+              </span>
+            </div>
+          )}
+
+          {hasInsufficientBalance && (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+              <p className="text-xs font-semibold text-red-600">
+                Saldo AlidPay tidak mencukupi untuk transaksi ini.
+              </p>
+              <Link
+                href={`/account/top-up?return=${encodeURIComponent(`/transaction/${transaction.id}/payment`)}`}
+                className="text-xs font-bold text-[#181715] underline underline-offset-4"
+              >
+                Top up saldo
+              </Link>
+            </div>
+          )}
         </section>
 
         {/* PRICE */}
@@ -429,11 +523,17 @@ export default function PaymentPage() {
               {error}
             </div>
           )}
+          {notice && !error && (
+            <div className="mb-4 rounded-[1.25rem] border border-blue-200 bg-blue-50 px-5 py-4 text-sm font-semibold text-blue-700">
+              {notice}
+            </div>
+          )}
 
           <button
             type="button"
-            disabled={paying}
-            onClick={handleSimulationPayment}
+            disabled={paying || hasInsufficientBalance}
+            aria-busy={paying}
+            onClick={handlePayment}
             className="group flex w-full items-center justify-center gap-3 rounded-full bg-[#181715] px-6 py-4 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-[#2A2926] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {paying ? (
@@ -443,7 +543,9 @@ export default function PaymentPage() {
               </>
             ) : (
               <>
-                Simulasikan pembayaran
+                {isBalancePayment
+                  ? "Bayar dengan saldo AlidPay"
+                  : `Lanjutkan ke ${paymentMethod === "qris" ? "QRIS" : paymentMethod === "bank" ? "Transfer Bank" : "E-Wallet"}`}
                 <ArrowRight
                   size={17}
                   className="transition-transform group-hover:translate-x-1"
@@ -453,8 +555,8 @@ export default function PaymentPage() {
           </button>
 
           <p className="mt-3 text-center text-xs leading-5 text-[#96928A]">
-            Ini hanya simulasi untuk development. Tidak ada uang sungguhan yang
-            diproses.
+            Sandbox hanya memakai uang uji. Status lunas berasal dari webhook
+            Midtrans yang diverifikasi server, bukan dari popup.
           </p>
         </section>
       </div>
@@ -468,12 +570,14 @@ function PaymentOption({
   icon,
   title,
   description,
+  badge,
 }: {
   active: boolean;
   onClick: () => void;
   icon: React.ReactNode;
   title: string;
   description: string;
+  badge?: string;
 }) {
   return (
     <button
@@ -494,8 +598,14 @@ function PaymentOption({
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-bold">{title}</p>
-
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-bold">{title}</p>
+          {badge && (
+            <span className="rounded-full bg-[#C89A56]/15 px-2 py-0.5 text-[10px] font-bold text-[#7A572E]">
+              {badge}
+            </span>
+          )}
+        </div>
         <p className="mt-1 text-xs text-[#96928A]">{description}</p>
       </div>
 

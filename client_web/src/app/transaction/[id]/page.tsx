@@ -28,6 +28,7 @@ import {
   Loader2,
   MessageCircle,
   Package,
+  ReceiptText,
   Store,
   UserRound,
   Wallet,
@@ -307,6 +308,16 @@ function TransactionDetailContent() {
                           </p>
                         )}
                       </div>
+                    )}
+                    {transaction.status === "dana_dicairkan" && (
+                      <ActionButton
+                        label="Lihat & cetak struk selesai"
+                        icon={<ReceiptText size={17} />}
+                        secondary
+                        onClick={() =>
+                          router.push(`/transaction/${transaction.id}/receipt`)
+                        }
+                      />
                     )}
                     {transaction.status === "dibatalkan" && (
                       <div className="rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-sm font-semibold leading-6 text-red-200">

@@ -27,6 +27,7 @@ function LoginContent() {
     password: "",
   });
   const [googleRole, setGoogleRole] = useState<"pembeli" | "penjual">("pembeli");
+  const [pendingGoogleToken, setPendingGoogleToken] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,23 +78,48 @@ function LoginContent() {
     }
   }
 
-  async function handleFirebaseIdToken(idToken: string) {
+  async function submitFirebaseIdToken(
+    idToken: string,
+    role?: "pembeli" | "penjual",
+  ) {
     setGoogleSubmitting(true);
     setError(null);
     try {
       await api.get("/sanctum/csrf-cookie");
       await api.post("/api/login-firebase", {
         id_token: idToken,
-        role: googleRole,
+        ...(role ? { role } : {}),
       });
+      setPendingGoogleToken(null);
       await refreshUser();
       router.replace(redirect);
       router.refresh();
     } catch (err) {
+      if (
+        axios.isAxiosError(err)
+        && err.response?.status === 422
+        && err.response?.data?.code === "google_role_required"
+      ) {
+        setPendingGoogleToken(idToken);
+        return;
+      }
+
       setError(getErrorMessage(err));
     } finally {
       setGoogleSubmitting(false);
     }
+  }
+
+  async function handleFirebaseIdToken(idToken: string) {
+    // Existing identities never send a browser-selected role. The server only
+    // asks for one after it has verified that this is a genuinely new account.
+    await submitFirebaseIdToken(idToken);
+  }
+
+  async function completeGoogleOnboarding() {
+    if (!pendingGoogleToken) return;
+
+    await submitFirebaseIdToken(pendingGoogleToken, googleRole);
   }
 
   if (user && !addingAccount) {
@@ -278,35 +304,48 @@ function LoginContent() {
                 </div>
 
                 <div>
-                  <p className="text-center text-[10px] font-bold uppercase tracking-[0.14em] text-[#96928A]">
-                    Untuk akun Google baru, pilih peran
-                  </p>
-                  <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-[#EFECE4] p-1">
-                    {(["pembeli", "penjual"] as const).map((role) => (
-                      <button
-                        key={role}
-                        type="button"
-                        onClick={() => setGoogleRole(role)}
-                        aria-pressed={googleRole === role}
-                        className={`rounded-lg px-4 py-2.5 text-xs font-bold capitalize transition ${
-                          googleRole === role
-                            ? "bg-white text-[#181715] shadow-sm"
-                            : "text-[#96928A] hover:text-[#181715]"
-                        }`}
-                      >
-                        {role}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-4">
                   <GoogleSignInButton
                     disabled={submitting || googleSubmitting}
                     onIdToken={handleFirebaseIdToken}
                     onError={(message) => setError(message || null)}
                   />
                 </div>
+
+                {pendingGoogleToken ? (
+                  <div className="mt-4 rounded-2xl border border-[#D8D4CB] bg-[#EFECE4] p-4">
+                    <p className="text-center text-[10px] font-bold uppercase tracking-[0.14em] text-[#96928A]">
+                      Akun Google baru · pilih peran sekali
+                    </p>
+                    <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-[#E5E1D8] p-1">
+                      {(["pembeli", "penjual"] as const).map((role) => (
+                        <button
+                          key={role}
+                          type="button"
+                          disabled={googleSubmitting}
+                          onClick={() => setGoogleRole(role)}
+                          aria-pressed={googleRole === role}
+                          className={`rounded-lg px-4 py-2.5 text-xs font-bold capitalize transition ${
+                            googleRole === role
+                              ? "bg-white text-[#181715] shadow-sm"
+                              : "text-[#96928A] hover:text-[#181715]"
+                          }`}
+                        >
+                          {role}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={googleSubmitting}
+                      onClick={() => void completeGoogleOnboarding()}
+                      className="mt-3 flex w-full items-center justify-center rounded-xl bg-[#181715] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#2A2926] disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {googleSubmitting
+                        ? "Membuat akun..."
+                        : `Buat akun sebagai ${googleRole}`}
+                    </button>
+                  </div>
+                ) : null}
 
                 {error ? (
                   <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-xs leading-5 text-red-700">
