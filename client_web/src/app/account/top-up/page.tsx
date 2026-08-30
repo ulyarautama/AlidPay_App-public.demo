@@ -24,6 +24,10 @@ type TopUpStatus = "creating" | "pending" | "succeeded" | "failed" | "expired";
 const presets = [50_000, 100_000, 250_000, 500_000, 1_000_000];
 
 export default function TopUpPage() {
+  const testBalanceEnabled =
+    process.env.NEXT_PUBLIC_TEST_BALANCE_ENABLED === "true" ||
+    (process.env.NEXT_PUBLIC_TEST_BALANCE_ENABLED !== "false" &&
+      process.env.NODE_ENV === "development");
   const router = useRouter();
   const { user, loading, refreshUser } = useAuth();
   const [amount, setAmount] = useState(100_000);
@@ -115,6 +119,18 @@ export default function TopUpPage() {
     );
   }
 
+  if (!testBalanceEnabled) {
+    return (
+      <main className="min-h-screen bg-[#F5EFE6] px-5 pb-20 pt-28 sm:px-8">
+        <div className="mx-auto max-w-3xl rounded-[1.75rem] border border-[#DCD8CF] bg-[#EFECE4] p-8 text-center">
+          <h1 className="text-2xl font-bold">Saldo uji tidak tersedia</h1>
+          <p className="mt-3 text-sm text-[#75726B]">Gunakan pembayaran gateway yang tersedia untuk transaksi.</p>
+          <button type="button" onClick={() => router.push(getReturnPath())} className="mt-6 rounded-full bg-[#181715] px-6 py-3 text-sm font-bold text-white">Kembali</button>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#F5EFE6] px-5 pb-20 pt-24 sm:px-8">
       <MidtransSnap
@@ -151,10 +167,10 @@ export default function TopUpPage() {
             Midtrans Sandbox
           </p>
           <h1 className="mt-3 text-4xl font-bold tracking-[-0.06em] sm:text-5xl">
-            Top up saldo
+            Isi saldo uji
           </h1>
           <p className="mt-3 text-sm text-[#75726B]">
-            Saldo saat ini {formatRupiah(Number(user.balance))}. Sandbox tidak memakai uang sungguhan.
+            Saldo uji saat ini {formatRupiah(Number(user.balance))}. Fitur ini hanya untuk dev/test dan tidak memakai uang sungguhan.
           </p>
         </div>
 
@@ -212,7 +228,7 @@ export default function TopUpPage() {
           onClick={() => void startTopUp()}
           className="mt-5 flex w-full items-center justify-center gap-3 rounded-full bg-[#181715] px-6 py-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {submitting ? <><Loader2 size={17} className="animate-spin" /> Memproses...</> : <>{status === "succeeded" ? "Saldo sudah ditambahkan" : `Top up ${formatRupiah(amount)}`} <ArrowRight size={17} /></>}
+          {submitting ? <><Loader2 size={17} className="animate-spin" /> Memproses...</> : <>{status === "succeeded" ? "Saldo uji sudah ditambahkan" : `Isi saldo uji ${formatRupiah(amount)}`} <ArrowRight size={17} /></>}
         </button>
       </div>
     </main>

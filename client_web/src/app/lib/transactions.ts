@@ -92,7 +92,7 @@ export const transactionStatuses: Record<
     dot: "bg-orange-500",
   },
   dana_ditahan: {
-    label: "Dana aman di escrow AlidPay",
+    label: "Dana berstatus ditahan",
     short: "Dana Diamankan",
     tone: "bg-blue-50 text-blue-700 border-blue-200",
     dot: "bg-blue-500",

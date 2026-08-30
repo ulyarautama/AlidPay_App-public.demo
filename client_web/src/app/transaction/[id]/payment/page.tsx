@@ -55,6 +55,11 @@ interface Transaction {
 
 type PaymentMethod = "alidpay_balance" | "qris" | "bank" | "ewallet";
 
+const testBalanceEnabled =
+  process.env.NEXT_PUBLIC_TEST_BALANCE_ENABLED === "true" ||
+  (process.env.NEXT_PUBLIC_TEST_BALANCE_ENABLED !== "false" &&
+    process.env.NODE_ENV === "development");
+
 export default function PaymentPage() {
   const params = useParams();
   const router = useRouter();
@@ -69,7 +74,7 @@ export default function PaymentPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [paymentMethod, setPaymentMethod] =
-    useState<PaymentMethod>("alidpay_balance");
+    useState<PaymentMethod>(testBalanceEnabled ? "alidpay_balance" : "qris");
   const [snapCheckout, setSnapCheckout] = useState<MidtransCheckout | null>(null);
   const paymentRequestInFlight = useRef(false);
 
@@ -319,7 +324,8 @@ export default function PaymentPage() {
 
               <p className="mt-1 text-xs leading-5 text-[#75726B]">
                 QRIS, transfer bank, dan e-wallet memakai uang uji Midtrans.
-                Saldo AlidPay tetap diproses oleh ledger internal AlidPay.
+                {testBalanceEnabled &&
+                  " Saldo uji AlidPay hanya tersedia di lingkungan dev/test."}
               </p>
             </div>
           </div>
@@ -405,13 +411,16 @@ export default function PaymentPage() {
           </div>
 
           <div className="mt-6 space-y-3">
-            <PaymentOption
-              active={paymentMethod === "alidpay_balance"}
-              onClick={() => setPaymentMethod("alidpay_balance")}
-              icon={<Wallet size={20} />}
-              title="Saldo AlidPay"
-              description={`Saldo tersedia ${formatRupiah(currentBalance)}`}
-            />
+            {testBalanceEnabled && (
+              <PaymentOption
+                active={paymentMethod === "alidpay_balance"}
+                onClick={() => setPaymentMethod("alidpay_balance")}
+                icon={<Wallet size={20} />}
+                title="Saldo uji AlidPay"
+                description={`Saldo uji tersedia ${formatRupiah(currentBalance)}`}
+                badge="Dev/Test"
+              />
+            )}
 
             <PaymentOption
               active={paymentMethod === "qris"}
@@ -441,7 +450,7 @@ export default function PaymentPage() {
             />
           </div>
 
-          {isBalancePayment && (
+          {testBalanceEnabled && isBalancePayment && (
             <div className="mt-4 flex items-center justify-between gap-4 border-t border-[#DCD8CF] pt-4 text-sm">
               <span className="text-[#75726B]">Sisa setelah pembayaran</span>
               <span
@@ -454,16 +463,16 @@ export default function PaymentPage() {
             </div>
           )}
 
-          {hasInsufficientBalance && (
+          {testBalanceEnabled && hasInsufficientBalance && (
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
               <p className="text-xs font-semibold text-red-600">
-                Saldo AlidPay tidak mencukupi untuk transaksi ini.
+                Saldo uji AlidPay tidak mencukupi untuk transaksi ini.
               </p>
               <Link
                 href={`/account/top-up?return=${encodeURIComponent(`/transaction/${transaction.id}/payment`)}`}
                 className="text-xs font-bold text-[#181715] underline underline-offset-4"
               >
-                Top up saldo
+                Isi saldo uji
               </Link>
             </div>
           )}
