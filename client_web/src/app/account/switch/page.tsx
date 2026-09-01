@@ -41,6 +41,10 @@ function AccountSwitcherContent() {
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<RememberedAccount | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const accountLimitReached = accounts.length >= 2;
+  const missingRole = accounts.some((account) => account.role === "pembeli")
+    ? "Penjual"
+    : "Pembeli";
 
   useEffect(() => {
     if (selectionRequired) requireAccountSelection();
@@ -250,16 +254,26 @@ function AccountSwitcherContent() {
           </p>
         )}
 
-        <Link
-          href="/login?add_account=1&redirect=/account/switch"
-          className="mt-5 flex w-full items-center justify-center gap-2 rounded-full border border-[#181715] px-5 py-3.5 text-sm font-bold transition hover:bg-[#181715] hover:text-white"
-        >
-          <Plus size={17} /> Tambahkan akun lain
-        </Link>
+        {accountLimitReached ? (
+          <div className="mt-5 rounded-2xl border border-[#D8D4CB] bg-[#EFECE4] px-5 py-4 text-center">
+            <p className="text-sm font-bold">Batas Kelola Akun sudah penuh</p>
+            <p className="mt-1 text-xs leading-5 text-[#75726B]">
+              Perangkat ini hanya dapat menyimpan satu akun Pembeli dan satu
+              akun Penjual. Keluarkan salah satu akun untuk menggantinya.
+            </p>
+          </div>
+        ) : (
+          <Link
+            href="/login?add_account=1&redirect=/account/switch"
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-full border border-[#181715] px-5 py-3.5 text-sm font-bold transition hover:bg-[#181715] hover:text-white"
+          >
+            <Plus size={17} /> Tambahkan akun {missingRole}
+          </Link>
+        )}
 
         <p className="mt-4 text-center text-[11px] leading-5 text-[#96928A]">
-          Akun baru perlu diverifikasi satu kali. Daftar akun dipercaya selama
-          30 hari pada browser ini.
+          Maksimal dua akun: satu Pembeli dan satu Penjual. Akun baru perlu
+          diverifikasi satu kali dan dipercaya selama 30 hari pada browser ini.
         </p>
       </div>
 
