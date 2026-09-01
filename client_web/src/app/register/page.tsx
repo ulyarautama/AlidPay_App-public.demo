@@ -45,7 +45,12 @@ function RegisterContent() {
 
     try {
       await api.get("/sanctum/csrf-cookie");
-      await api.post("/api/register", formData);
+      const response = await api.post("/api/register", formData);
+      const cooldownSeconds = Number(response.data?.cooldown_seconds ?? 60);
+      sessionStorage.setItem(
+        `alidpay:otp-resend:${formData.email.trim().toLowerCase()}`,
+        String(Date.now() + cooldownSeconds * 1000),
+      );
       router.push(
         `/verify-email?email=${encodeURIComponent(formData.email)}&redirect=${encodeURIComponent(redirect)}`,
       );
