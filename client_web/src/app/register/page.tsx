@@ -54,8 +54,8 @@ function RegisterContent() {
       router.push(
         `/verify-email?email=${encodeURIComponent(formData.email)}&redirect=${encodeURIComponent(redirect)}`,
       );
-    } catch (err) {
-      console.error(err);
+    } catch {
+      //
     }
   }
 

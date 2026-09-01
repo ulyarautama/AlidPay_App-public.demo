@@ -184,7 +184,6 @@ function AuthenticatedDashboard({
         Array.isArray(response.data?.data) ? response.data.data : [],
       );
     } catch (error) {
-      console.error("Gagal memuat ringkasan transaksi:", error);
       setLoadError(true);
     } finally {
       setLoading(false);
@@ -537,7 +536,7 @@ function HomeContent() {
       );
       router.refresh();
     } catch (err) {
-      console.error(err);
+      //
     }
   }
 
@@ -549,7 +548,7 @@ function HomeContent() {
       setAlidPayIdCopied(true);
       window.setTimeout(() => setAlidPayIdCopied(false), 1600);
     } catch (err) {
-      console.error("Gagal menyalin ID AlidPay", err);
+      //
     }
   }
 

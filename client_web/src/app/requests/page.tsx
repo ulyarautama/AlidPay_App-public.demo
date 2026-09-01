@@ -75,7 +75,6 @@ export default function RequestsPage() {
 
       setRequestsTransaction(res.data.data ?? []);
     } catch (err) {
-      console.error("Gagal mengambil transaction requests:", err);
     } finally {
       setLoading(false);
     }

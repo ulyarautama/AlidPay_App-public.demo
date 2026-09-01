@@ -105,7 +105,7 @@ export default function PaymentPage() {
         setRedirecting(true);
         return;
       }
-      console.error("Gagal mengambil transaksi:", err);
+
       setError("Gagal mengambil detail transaksi.");
     } finally {
       setLoading(false);
@@ -156,8 +156,6 @@ export default function PaymentPage() {
       );
       setSnapCheckout(checkout);
     } catch (err: unknown) {
-      console.error("Gagal melakukan pembayaran:", err);
-
       setError(apiErrorMessage(err, "Pembayaran gagal diproses."));
       paymentRequestInFlight.current = false;
       setPaying(false);
@@ -313,7 +311,7 @@ export default function PaymentPage() {
         </div>
 
         {/* TEST MODE */}
-        <div className="mt-7 rounded-[1.5rem] border border-[#C89A56]/40 bg-[#C89A56]/10 p-5">
+        <div className="mt-7 rounded-3xl border border-[#C89A56]/40 bg-[#C89A56]/10 p-5">
           <div className="flex items-start gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#C89A56]/15">
               <CreditCard size={17} className="text-[#9A7038]" />
@@ -350,7 +348,7 @@ export default function PaymentPage() {
           <div className="mt-6 grid gap-4 border-t border-[#DCD8CF] pt-5 sm:grid-cols-2">
             {/* BUYER */}
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.1em] text-[#96928A]">
+              <p className="text-xs font-bold uppercase tracking-widest text-[#96928A]">
                 Pembeli
               </p>
 
@@ -373,7 +371,7 @@ export default function PaymentPage() {
 
             {/* SELLER */}
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.1em] text-[#96928A]">
+              <p className="text-xs font-bold uppercase tracking-widest text-[#96928A]">
                 Penjual
               </p>
 

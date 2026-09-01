@@ -53,11 +53,22 @@ function isProtectedUserRoute(pathname: string) {
   );
 }
 
-async function loadCurrentUser() {
-  return api
+type SessionStatus = "unchecked" | "authenticated" | "guest";
+
+let currentUserRequest: Promise<User | null> | null = null;
+
+function loadCurrentUser() {
+  if (currentUserRequest) return currentUserRequest;
+
+  currentUserRequest = api
     .get("/api/me", { timeout: 8000 })
     .then((res) => res.data.user as User)
-    .catch(() => null);
+    .catch(() => null)
+    .finally(() => {
+      currentUserRequest = null;
+    });
+
+  return currentUserRequest;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -69,16 +80,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     && pathname !== "/bantuan";
   const protectedRoute = isProtectedUserRoute(pathname);
   const [user, setUser] = useState<User | null>(null);
-  const [sessionCheckedPath, setSessionCheckedPath] = useState<string | null>(null);
-  const loading = needsUserAuth && sessionCheckedPath !== pathname;
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus>("unchecked");
+  const loading = needsUserAuth && sessionStatus === "unchecked";
 
   const refreshUser = useCallback(async () => {
-    setUser(await loadCurrentUser());
-    setSessionCheckedPath(pathname);
-  }, [pathname]);
+    const authenticatedUser = await loadCurrentUser();
+    if (authenticatedUser) clearAccountSelectionRequirement();
+    setUser(authenticatedUser);
+    setSessionStatus(authenticatedUser ? "authenticated" : "guest");
+  }, []);
 
   useEffect(() => {
-    if (!needsUserAuth) return;
+    if (!needsUserAuth || sessionStatus !== "unchecked") return;
 
     let active = true;
 
@@ -87,22 +100,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (active) {
           if (authenticatedUser) clearAccountSelectionRequirement();
           setUser(authenticatedUser);
+          setSessionStatus(authenticatedUser ? "authenticated" : "guest");
         }
-      })
-      .finally(() => {
-        if (active) setSessionCheckedPath(pathname);
       });
 
     return () => {
       active = false;
     };
-  }, [needsUserAuth, pathname]);
+  }, [needsUserAuth, sessionStatus]);
 
   useEffect(() => {
-    const revalidateRestoredPage = () => void refreshUser();
+    const revalidateRestoredPage = (event: PageTransitionEvent) => {
+      if (event.persisted && needsUserAuth) void refreshUser();
+    };
     window.addEventListener("pageshow", revalidateRestoredPage);
     return () => window.removeEventListener("pageshow", revalidateRestoredPage);
-  }, [refreshUser]);
+  }, [needsUserAuth, refreshUser]);
 
   useEffect(() => {
     if (loading || user) return;
@@ -129,11 +142,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function login(user: User) {
     clearAccountSelectionRequirement();
     setUser(user);
+    setSessionStatus("authenticated");
   }
 
   function logout() {
     setUser(null);
-    setSessionCheckedPath(pathname);
+    setSessionStatus("guest");
   }
 
   if (protectedRoute && (loading || !user)) {

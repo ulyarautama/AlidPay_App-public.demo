@@ -163,7 +163,6 @@ export default function TransactionsPage() {
        */
       setTransactions(res.data.data ?? []);
     } catch (error) {
-      console.error("Gagal mengambil semua transaksi:", error);
       setTransactions([]);
     } finally {
       setLoading(false);

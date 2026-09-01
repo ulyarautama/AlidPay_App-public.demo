@@ -379,8 +379,6 @@ export default function DisputesPage() {
           setDisputes(data);
         }
       } catch (error) {
-        console.error(error);
-
         if (mounted) {
           setError("Gagal memuat data dispute.");
         }
